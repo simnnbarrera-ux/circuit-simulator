@@ -1,5 +1,31 @@
-import { useRef, useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Line, Circle, Rect, Text, Group } from 'react-konva';
+
+/**
+ * Obtener texto del valor del componente con unidades
+ */
+const getComponentValueText = (component) => {
+  const { type, value } = component;
+  
+  switch (type) {
+    case 'voltage_source':
+      return `${value} V`;
+    case 'current_source':
+      return `${value} A`;
+    case 'resistor':
+      return value >= 1000 ? `${(value / 1000).toFixed(1)} kΩ` : `${value} Ω`;
+    case 'capacitor':
+      return value >= 1000 ? `${(value / 1000).toFixed(1)} mF` : `${value} μF`;
+    case 'inductor':
+      return value >= 1000 ? `${(value / 1000).toFixed(1)} H` : `${value} mH`;
+    case 'led':
+      return `${value} V`;
+    case 'ground':
+      return 'GND';
+    default:
+      return '';
+  }
+};
 
 /**
  * CircuitCanvas - Componente principal del canvas interactivo
@@ -248,6 +274,18 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminal
       {/* Renderizar símbolo del componente */}
       {renderComponentSymbol(component)}
 
+      {/* Valor del componente (sobre el símbolo) */}
+      <Text
+        x={-30}
+        y={-45}
+        width={60}
+        text={getComponentValueText(component)}
+        fontSize={11}
+        fontStyle="bold"
+        fill="#1f2937"
+        align="center"
+      />
+
       {/* Etiqueta del componente */}
       <Text
         x={-25}
@@ -352,6 +390,9 @@ const renderComponentSymbol = (component) => {
           <Circle x={0} y={0} radius={20} stroke="#dc2626" strokeWidth={2} />
           <Line points={[-5, 0, 5, 0]} stroke="#dc2626" strokeWidth={2} />
           <Line points={[0, -5, 0, 5]} stroke="#dc2626" strokeWidth={2} />
+          {/* Marcas de polaridad */}
+          <Text x={18} y={-8} text="+" fontSize={16} fontStyle="bold" fill="#dc2626" />
+          <Text x={-28} y={-8} text="−" fontSize={16} fontStyle="bold" fill="#dc2626" />
         </>
       );
 

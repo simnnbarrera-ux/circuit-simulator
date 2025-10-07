@@ -5,6 +5,7 @@ import ComponentLibrary from './components/ComponentLibrary';
 import CircuitCanvas from './components/CircuitCanvas';
 import PropertiesPanel from './components/PropertiesPanel';
 import ResultsPanel from './components/ResultsPanel';
+import AnalysisModal from './components/AnalysisModal';
 import { simulateCircuit } from './lib/circuitSimulator';
 
 /**
@@ -25,6 +26,9 @@ function App() {
   
   // Resultados de la simulación
   const [simulationResults, setSimulationResults] = useState(null);
+
+  // Estado del modal de análisis
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
 
   // Obtener el componente seleccionado
   const selectedComponent = components.find(c => c.id === selectedComponentId);
@@ -154,6 +158,7 @@ function App() {
         onClearCanvas={handleClearCanvas}
         onSaveProject={handleSaveProject}
         onLoadProject={handleLoadProject}
+        onViewAnalysis={() => setShowAnalysisModal(true)}
       />
 
       {/* Área de trabajo principal */}
@@ -201,9 +206,17 @@ function App() {
           )}
         </div>
         <div className="text-xs text-gray-400">
-          v1.0.0 | Simulador de Circuitos Eléctricos
+          v1.0.0 | SibaruCircuits
         </div>
       </div>
+
+      {/* Modal de análisis */}
+      <AnalysisModal
+        isOpen={showAnalysisModal}
+        onClose={() => setShowAnalysisModal(false)}
+        simulationResults={simulationResults}
+        components={components}
+      />
     </div>
   );
 }

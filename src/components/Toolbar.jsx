@@ -6,7 +6,8 @@ import {
   Save, 
   FolderOpen,
   Trash2,
-  Settings
+  Settings,
+  BarChart3
 } from 'lucide-react';
 
 /**
@@ -19,18 +20,17 @@ const Toolbar = ({
   onResetSimulation,
   onClearCanvas,
   onSaveProject,
-  onLoadProject
+  onLoadProject,
+  onViewAnalysis
 }) => {
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
       {/* Logo y título */}
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-          <span className="text-white font-bold text-sm">⚡</span>
-        </div>
+        <img src="/logo.png" alt="SibaruCircuits" className="w-10 h-10 object-contain" />
         <div>
-          <h1 className="text-lg font-bold text-gray-800">Simulador de Circuitos</h1>
-          <p className="text-xs text-gray-500">Herramienta educativa interactiva</p>
+          <h1 className="text-lg font-bold text-gray-800">SibaruCircuits</h1>
+          <p className="text-xs text-gray-500">Simulador de circuitos eléctricos</p>
         </div>
       </div>
 
@@ -61,6 +61,16 @@ const Toolbar = ({
           <RotateCcw className="w-4 h-4 mr-2" />
           Reiniciar
         </Button>
+
+        {isSimulating && (
+          <Button
+            onClick={onViewAnalysis}
+            className="bg-purple-600 hover:bg-purple-700 text-white"
+          >
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Ver Valores del Circuito
+          </Button>
+        )}
 
         <div className="w-px h-8 bg-gray-300 mx-2" />
 
