@@ -5,10 +5,20 @@ import { Stage, Layer, Line, Circle, Rect, Text, Group } from 'react-konva';
  * CircuitCanvas - Componente principal del canvas interactivo
  * Permite arrastrar y soltar componentes eléctricos y conectarlos
  */
-const CircuitCanvas = ({ components, onComponentsChange, selectedComponent, onSelectComponent }) => {
+const CircuitCanvas = ({ 
+  components, 
+  onComponentsChange, 
+  selectedComponent, 
+  onSelectComponent,
+  connections = [],
+  onConnectionsChange = () => {}
+}) => {
   const stageRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionStart, setConnectionStart] = useState(null);
+  const [tempConnection, setTempConnection] = useState(null);
 
   // Ajustar el tamaño del canvas al contenedor
   useEffect(() => {
@@ -44,14 +54,83 @@ const CircuitCanvas = ({ components, onComponentsChange, selectedComponent, onSe
 
   // Manejar la selección de componentes
   const handleSelect = (id) => {
-    onSelectComponent(id);
+    if (!isConnecting) {
+      onSelectComponent(id);
+    }
   };
 
   // Deseleccionar al hacer clic en el canvas vacío
   const handleStageClick = (e) => {
     if (e.target === e.target.getStage()) {
       onSelectComponent(null);
+      if (isConnecting) {
+        setIsConnecting(false);
+        setConnectionStart(null);
+        setTempConnection(null);
+      }
     }
+  };
+
+  // Iniciar conexión desde un terminal
+  const handleTerminalClick = (componentId, terminalIndex, x, y) => {
+    if (!isConnecting) {
+      // Iniciar nueva conexión
+      setIsConnecting(true);
+      setConnectionStart({ componentId, terminalIndex, x, y });
+    } else {
+      // Completar conexión
+      if (connectionStart.componentId !== componentId) {
+        const newConnection = {
+          id: `conn-${Date.now()}`,
+          from: { 
+            componentId: connectionStart.componentId, 
+            terminal: connectionStart.terminalIndex 
+          },
+          to: { 
+            componentId, 
+            terminal: terminalIndex 
+          }
+        };
+        onConnectionsChange([...connections, newConnection]);
+      }
+      setIsConnecting(false);
+      setConnectionStart(null);
+      setTempConnection(null);
+    }
+  };
+
+  // Actualizar conexión temporal mientras se arrastra
+  const handleMouseMove = (e) => {
+    if (isConnecting && connectionStart) {
+      const stage = e.target.getStage();
+      const pointerPos = stage.getPointerPosition();
+      setTempConnection({
+        x1: connectionStart.x,
+        y1: connectionStart.y,
+        x2: pointerPos.x,
+        y2: pointerPos.y
+      });
+    }
+  };
+
+  // Eliminar conexión
+  const handleConnectionClick = (connectionId) => {
+    onConnectionsChange(connections.filter(c => c.id !== connectionId));
+  };
+
+  // Obtener posición de un terminal
+  const getTerminalPosition = (componentId, terminalIndex) => {
+    const component = components.find(c => c.id === componentId);
+    if (!component) return { x: 0, y: 0 };
+
+    const terminals = getComponentTerminals(component);
+    if (terminals[terminalIndex]) {
+      return {
+        x: component.x + terminals[terminalIndex].x,
+        y: component.y + terminals[terminalIndex].y
+      };
+    }
+    return { x: component.x, y: component.y };
   };
 
   return (
@@ -59,12 +138,20 @@ const CircuitCanvas = ({ components, onComponentsChange, selectedComponent, onSe
       {/* Grid de fondo */}
       <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none" />
       
+      {/* Indicador de modo conexión */}
+      {isConnecting && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-10">
+          🔌 Modo Conexión: Haz clic en otro terminal para conectar
+        </div>
+      )}
+      
       <Stage
         ref={stageRef}
         width={stageSize.width}
         height={stageSize.height}
         onClick={handleStageClick}
         onTap={handleStageClick}
+        onMouseMove={handleMouseMove}
       >
         <Layer>
           {/* Renderizar grid de puntos */}
@@ -80,14 +167,44 @@ const CircuitCanvas = ({ components, onComponentsChange, selectedComponent, onSe
             ))
           )}
 
+          {/* Renderizar conexiones */}
+          {connections.map(connection => {
+            const fromPos = getTerminalPosition(connection.from.componentId, connection.from.terminal);
+            const toPos = getTerminalPosition(connection.to.componentId, connection.to.terminal);
+            
+            return (
+              <Line
+                key={connection.id}
+                points={[fromPos.x, fromPos.y, toPos.x, toPos.y]}
+                stroke="#2563eb"
+                strokeWidth={3}
+                onClick={() => handleConnectionClick(connection.id)}
+                onTap={() => handleConnectionClick(connection.id)}
+                hitStrokeWidth={10}
+              />
+            );
+          })}
+
+          {/* Renderizar conexión temporal */}
+          {tempConnection && (
+            <Line
+              points={[tempConnection.x1, tempConnection.y1, tempConnection.x2, tempConnection.y2]}
+              stroke="#93c5fd"
+              strokeWidth={2}
+              dash={[5, 5]}
+            />
+          )}
+
           {/* Renderizar componentes */}
-          {components.map((component) => (
+          {components.map(component => (
             <ComponentShape
               key={component.id}
               component={component}
               isSelected={selectedComponent === component.id}
               onDragEnd={(e) => handleDragEnd(e, component.id)}
               onSelect={() => handleSelect(component.id)}
+              onTerminalClick={handleTerminalClick}
+              isConnecting={isConnecting}
             />
           ))}
         </Layer>
@@ -97,292 +214,207 @@ const CircuitCanvas = ({ components, onComponentsChange, selectedComponent, onSe
 };
 
 /**
- * ComponentShape - Renderiza la forma visual de cada componente
+ * ComponentShape - Renderiza un componente individual con sus terminales
  */
-const ComponentShape = ({ component, isSelected, onDragEnd, onSelect }) => {
-  const { type, x, y, rotation = 0 } = component;
+const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminalClick, isConnecting }) => {
+  const { type, x, y, rotation, label } = component;
 
-  // Renderizar según el tipo de componente
-  const renderShape = () => {
-    switch (type) {
-      case 'resistor':
-        return <ResistorShape />;
-      case 'capacitor':
-        return <CapacitorShape />;
-      case 'inductor':
-        return <InductorShape />;
-      case 'voltage_source':
-        return <VoltageSourceShape />;
-      case 'current_source':
-        return <CurrentSourceShape />;
-      case 'led':
-        return <LEDShape />;
-      case 'ground':
-        return <GroundShape />;
-      default:
-        return <Rect width={40} height={40} fill="gray" />;
-    }
-  };
+  // Obtener terminales del componente
+  const terminals = getComponentTerminals(component);
 
   return (
     <Group
       x={x}
       y={y}
-      draggable
-      rotation={rotation}
+      draggable={!isConnecting}
       onDragEnd={onDragEnd}
       onClick={onSelect}
       onTap={onSelect}
+      rotation={rotation}
     >
-      {renderShape()}
-      
-      {/* Indicador de selección */}
+      {/* Fondo de selección */}
       {isSelected && (
         <Rect
-          x={-25}
-          y={-25}
-          width={50}
-          height={50}
+          x={-30}
+          y={-30}
+          width={60}
+          height={60}
           stroke="#3b82f6"
           strokeWidth={2}
           dash={[5, 5]}
-          listening={false}
         />
       )}
 
+      {/* Renderizar símbolo del componente */}
+      {renderComponentSymbol(component)}
+
       {/* Etiqueta del componente */}
       <Text
-        x={-20}
-        y={30}
-        text={component.label || type}
+        x={-25}
+        y={35}
+        width={50}
+        text={label || type}
         fontSize={10}
-        fill="#333"
-        listening={false}
+        fill="#374151"
+        align="center"
       />
+
+      {/* Renderizar terminales */}
+      {terminals.map((terminal, index) => (
+        <Circle
+          key={`terminal-${index}`}
+          x={terminal.x}
+          y={terminal.y}
+          radius={isConnecting ? 8 : 5}
+          fill={isConnecting ? "#3b82f6" : "#6b7280"}
+          stroke="#fff"
+          strokeWidth={2}
+          onClick={(e) => {
+            e.cancelBubble = true;
+            e.evt.stopPropagation();
+            console.log('Terminal clicked:', component.id, index);
+            onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
+          }}
+          onTap={(e) => {
+            e.cancelBubble = true;
+            e.evt.stopPropagation();
+            onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
+          }}
+          onMouseEnter={(e) => {
+            const container = e.target.getStage().container();
+            container.style.cursor = 'pointer';
+          }}
+          onMouseLeave={(e) => {
+            const container = e.target.getStage().container();
+            container.style.cursor = 'default';
+          }}
+        />
+      ))}
     </Group>
   );
 };
 
-// Formas de componentes individuales
+/**
+ * Obtener posiciones de terminales para cada tipo de componente
+ */
+const getComponentTerminals = (component) => {
+  const { type, rotation = 0 } = component;
+  
+  // Terminales base (antes de rotación)
+  let terminals = [];
+  
+  switch (type) {
+    case 'voltage_source':
+    case 'current_source':
+    case 'resistor':
+    case 'capacitor':
+    case 'inductor':
+    case 'led':
+      terminals = [
+        { x: -25, y: 0 },  // Terminal izquierdo
+        { x: 25, y: 0 }    // Terminal derecho
+      ];
+      break;
+    case 'ground':
+      terminals = [
+        { x: 0, y: -15 }   // Terminal superior
+      ];
+      break;
+    default:
+      terminals = [
+        { x: -20, y: 0 },
+        { x: 20, y: 0 }
+      ];
+  }
 
-const ResistorShape = () => (
-  <Group>
-    <Line
-      points={[-20, 0, -10, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Rect
-      x={-10}
-      y={-5}
-      width={20}
-      height={10}
-      fill="white"
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[10, 0, 20, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-  </Group>
-);
+  // Aplicar rotación a los terminales
+  return terminals.map(terminal => {
+    const rad = (rotation * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    return {
+      x: terminal.x * cos - terminal.y * sin,
+      y: terminal.x * sin + terminal.y * cos
+    };
+  });
+};
 
-const CapacitorShape = () => (
-  <Group>
-    <Line
-      points={[-20, 0, -2, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[-2, -10, -2, 10]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[2, -10, 2, 10]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[2, 0, 20, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-  </Group>
-);
+/**
+ * Renderizar el símbolo del componente
+ */
+const renderComponentSymbol = (component) => {
+  const { type, value } = component;
 
-const InductorShape = () => (
-  <Group>
-    <Line
-      points={[-20, 0, -10, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    {/* Espirales del inductor */}
-    {[-8, -4, 0, 4].map((x, i) => (
-      <Circle
-        key={i}
-        x={x}
-        y={-3}
-        radius={3}
-        stroke="black"
-        strokeWidth={2}
-      />
-    ))}
-    <Line
-      points={[8, 0, 20, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-  </Group>
-);
+  switch (type) {
+    case 'voltage_source':
+      return (
+        <>
+          <Circle x={0} y={0} radius={20} stroke="#dc2626" strokeWidth={2} />
+          <Line points={[-5, 0, 5, 0]} stroke="#dc2626" strokeWidth={2} />
+          <Line points={[0, -5, 0, 5]} stroke="#dc2626" strokeWidth={2} />
+        </>
+      );
 
-const VoltageSourceShape = () => (
-  <Group>
-    <Circle
-      x={0}
-      y={0}
-      radius={15}
-      stroke="black"
-      strokeWidth={2}
-      fill="white"
-    />
-    <Line
-      points={[-20, 0, -15, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[15, 0, 20, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Text
-      x={-8}
-      y={-6}
-      text="+"
-      fontSize={14}
-      fill="red"
-    />
-    <Text
-      x={-8}
-      y={-2}
-      text="−"
-      fontSize={14}
-      fill="black"
-    />
-  </Group>
-);
+    case 'current_source':
+      return (
+        <>
+          <Circle x={0} y={0} radius={20} stroke="#2563eb" strokeWidth={2} />
+          <Line points={[-8, 0, 8, 0]} stroke="#2563eb" strokeWidth={2} />
+          <Line points={[4, -4, 8, 0, 4, 4]} stroke="#2563eb" strokeWidth={2} />
+        </>
+      );
 
-const CurrentSourceShape = () => (
-  <Group>
-    <Circle
-      x={0}
-      y={0}
-      radius={15}
-      stroke="black"
-      strokeWidth={2}
-      fill="white"
-    />
-    <Line
-      points={[-20, 0, -15, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[15, 0, 20, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    {/* Flecha de corriente */}
-    <Line
-      points={[0, -8, 0, 8]}
-      stroke="blue"
-      strokeWidth={2}
-    />
-    <Line
-      points={[0, 8, -3, 5]}
-      stroke="blue"
-      strokeWidth={2}
-    />
-    <Line
-      points={[0, 8, 3, 5]}
-      stroke="blue"
-      strokeWidth={2}
-    />
-  </Group>
-);
+    case 'resistor':
+      return (
+        <Line
+          points={[-25, 0, -15, -8, -5, 8, 5, -8, 15, 8, 25, 0]}
+          stroke="#f59e0b"
+          strokeWidth={2}
+        />
+      );
 
-const LEDShape = () => (
-  <Group>
-    <Line
-      points={[-20, 0, -5, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    {/* Triángulo del LED */}
-    <Line
-      points={[-5, -8, -5, 8, 5, 0, -5, -8]}
-      stroke="black"
-      strokeWidth={2}
-      fill="white"
-      closed
-    />
-    <Line
-      points={[5, -8, 5, 8]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[5, 0, 20, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    {/* Flechas de luz */}
-    <Line
-      points={[8, -6, 12, -10]}
-      stroke="orange"
-      strokeWidth={1}
-    />
-    <Line
-      points={[12, -10, 10, -10]}
-      stroke="orange"
-      strokeWidth={1}
-    />
-    <Line
-      points={[12, -10, 12, -8]}
-      stroke="orange"
-      strokeWidth={1}
-    />
-  </Group>
-);
+    case 'capacitor':
+      return (
+        <>
+          <Line points={[-25, 0, -5, 0]} stroke="#10b981" strokeWidth={2} />
+          <Line points={[-5, -12, -5, 12]} stroke="#10b981" strokeWidth={3} />
+          <Line points={[5, -12, 5, 12]} stroke="#10b981" strokeWidth={3} />
+          <Line points={[5, 0, 25, 0]} stroke="#10b981" strokeWidth={2} />
+        </>
+      );
 
-const GroundShape = () => (
-  <Group>
-    <Line
-      points={[0, -20, 0, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[-10, 0, 10, 0]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[-7, 3, 7, 3]}
-      stroke="black"
-      strokeWidth={2}
-    />
-    <Line
-      points={[-4, 6, 4, 6]}
-      stroke="black"
-      strokeWidth={2}
-    />
-  </Group>
-);
+    case 'inductor':
+      return (
+        <Line
+          points={[-25, 0, -15, 0, -15, -8, -5, -8, -5, 8, 5, 8, 5, -8, 15, -8, 15, 0, 25, 0]}
+          stroke="#8b5cf6"
+          strokeWidth={2}
+        />
+      );
+
+    case 'led':
+      return (
+        <>
+          <Line points={[-25, 0, -8, 0]} stroke="#f97316" strokeWidth={2} />
+          <Line points={[-8, -10, -8, 10, 8, 0, -8, -10]} stroke="#f97316" strokeWidth={2} fill="#f97316" closed />
+          <Line points={[8, -10, 8, 10]} stroke="#f97316" strokeWidth={2} />
+          <Line points={[8, 0, 25, 0]} stroke="#f97316" strokeWidth={2} />
+        </>
+      );
+
+    case 'ground':
+      return (
+        <>
+          <Line points={[0, -15, 0, 0]} stroke="#ef4444" strokeWidth={2} />
+          <Line points={[-15, 0, 15, 0]} stroke="#ef4444" strokeWidth={3} />
+          <Line points={[-10, 5, 10, 5]} stroke="#ef4444" strokeWidth={2} />
+          <Line points={[-5, 10, 5, 10]} stroke="#ef4444" strokeWidth={2} />
+        </>
+      );
+
+    default:
+      return <Circle x={0} y={0} radius={15} stroke="#6b7280" strokeWidth={2} />;
+  }
+};
 
 export default CircuitCanvas;

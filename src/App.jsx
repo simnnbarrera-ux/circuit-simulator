@@ -14,6 +14,9 @@ function App() {
   // Estado de los componentes en el canvas
   const [components, setComponents] = useState([]);
   
+  // Estado de las conexiones entre componentes
+  const [connections, setConnections] = useState([]);
+  
   // Componente seleccionado actualmente
   const [selectedComponentId, setSelectedComponentId] = useState(null);
   
@@ -51,6 +54,7 @@ function App() {
   const handleClearCanvas = () => {
     if (confirm('¿Estás seguro de que deseas eliminar todos los componentes?')) {
       setComponents([]);
+      setConnections([]);
       setSelectedComponentId(null);
       setSimulationResults(null);
     }
@@ -63,8 +67,13 @@ function App() {
       return;
     }
     
-    // Ejecutar simulación
-    const result = simulateCircuit(components);
+    if (connections.length === 0) {
+      alert('Conecta los componentes antes de iniciar la simulación');
+      return;
+    }
+    
+    // Ejecutar simulación con conexiones
+    const result = simulateCircuit(components, connections);
     
     if (result.success) {
       setSimulationResults(result.results);
@@ -161,6 +170,8 @@ function App() {
             onComponentsChange={setComponents}
             selectedComponent={selectedComponentId}
             onSelectComponent={setSelectedComponentId}
+            connections={connections}
+            onConnectionsChange={setConnections}
           />
         </div>
 

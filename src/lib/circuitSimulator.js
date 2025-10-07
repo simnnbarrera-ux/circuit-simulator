@@ -7,8 +7,9 @@
  * Clase principal del simulador de circuitos
  */
 export class CircuitSimulator {
-  constructor(components) {
+  constructor(components, connections) {
     this.components = components;
+    this.connections = connections || [];
     this.nodes = new Map();
     this.results = null;
   }
@@ -60,18 +61,68 @@ export class CircuitSimulator {
    */
   identifyNodes() {
     this.nodes.clear();
-    let nodeId = 0;
+    
+    // Mapa de terminales a nodos
+    const terminalToNode = new Map();
+    let nextNodeId = 1;
 
-    // Por ahora, asignamos nodos basados en la posición de los componentes
-    // En una implementación completa, esto se basaría en las conexiones reales
+    // Función auxiliar para obtener clave de terminal
+    const getTerminalKey = (componentId, terminal) => `${componentId}-${terminal}`;
+
+    // Primero, identificar todos los nodos de tierra
     this.components.forEach(component => {
       if (component.type === 'ground') {
-        component.node1 = 0; // Nodo de tierra
+        const terminalKey = getTerminalKey(component.id, 0);
+        terminalToNode.set(terminalKey, 0);
+      }
+    });
+
+    // Procesar conexiones para agrupar terminales en nodos
+    this.connections.forEach(connection => {
+      const fromKey = getTerminalKey(connection.from.componentId, connection.from.terminal);
+      const toKey = getTerminalKey(connection.to.componentId, connection.to.terminal);
+
+      const fromNode = terminalToNode.get(fromKey);
+      const toNode = terminalToNode.get(toKey);
+
+      if (fromNode !== undefined && toNode !== undefined) {
+        // Ambos terminales ya tienen nodo, unificar al menor
+        const minNode = Math.min(fromNode, toNode);
+        const maxNode = Math.max(fromNode, toNode);
+        
+        // Reemplazar todas las referencias al nodo mayor por el menor
+        if (minNode !== maxNode) {
+          for (const [key, node] of terminalToNode.entries()) {
+            if (node === maxNode) {
+              terminalToNode.set(key, minNode);
+            }
+          }
+        }
+      } else if (fromNode !== undefined) {
+        // Solo from tiene nodo, asignar el mismo a to
+        terminalToNode.set(toKey, fromNode);
+      } else if (toNode !== undefined) {
+        // Solo to tiene nodo, asignar el mismo a from
+        terminalToNode.set(fromKey, toNode);
+      } else {
+        // Ninguno tiene nodo, crear uno nuevo
+        terminalToNode.set(fromKey, nextNodeId);
+        terminalToNode.set(toKey, nextNodeId);
+        nextNodeId++;
+      }
+    });
+
+    // Asignar nodos a los componentes
+    this.components.forEach(component => {
+      if (component.type === 'ground') {
+        component.node1 = 0;
         component.node2 = 0;
       } else {
-        // Asignar nodos temporales
-        component.node1 = ++nodeId;
-        component.node2 = ++nodeId;
+        const terminal0Key = getTerminalKey(component.id, 0);
+        const terminal1Key = getTerminalKey(component.id, 1);
+        
+        component.node1 = terminalToNode.get(terminal0Key) || nextNodeId++;
+        component.node2 = terminalToNode.get(terminal1Key) || nextNodeId++;
       }
     });
   }
@@ -337,7 +388,7 @@ export class CircuitSimulator {
 /**
  * Función auxiliar para ejecutar una simulación rápida
  */
-export function simulateCircuit(components) {
-  const simulator = new CircuitSimulator(components);
+export function simulateCircuit(components, connections) {
+  const simulator = new CircuitSimulator(components, connections);
   return simulator.simulate();
 }
