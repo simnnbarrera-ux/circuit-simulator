@@ -4,6 +4,8 @@ import Toolbar from './components/Toolbar';
 import ComponentLibrary from './components/ComponentLibrary';
 import CircuitCanvas from './components/CircuitCanvas';
 import PropertiesPanel from './components/PropertiesPanel';
+import ResultsPanel from './components/ResultsPanel';
+import { simulateCircuit } from './lib/circuitSimulator';
 
 /**
  * App - Componente principal del simulador de circuitos
@@ -61,9 +63,17 @@ function App() {
       return;
     }
     
-    setIsSimulating(true);
-    // TODO: Implementar lógica de simulación
-    console.log('Iniciando simulación con componentes:', components);
+    // Ejecutar simulación
+    const result = simulateCircuit(components);
+    
+    if (result.success) {
+      setSimulationResults(result.results);
+      setIsSimulating(true);
+      console.log('Simulación exitosa:', result.results);
+    } else {
+      alert(`Error en la simulación: ${result.error}`);
+      console.error('Error de simulación:', result.error);
+    }
   };
 
   // Pausar simulación
@@ -154,12 +164,17 @@ function App() {
           />
         </div>
 
-        {/* Panel derecho: Propiedades */}
-        <div className="w-80 bg-gray-50 p-4 border-l border-gray-200 overflow-y-auto">
+        {/* Panel derecho: Propiedades y Resultados */}
+        <div className="w-80 bg-gray-50 p-4 border-l border-gray-200 overflow-y-auto space-y-4">
           <PropertiesPanel
             component={selectedComponent}
             onUpdateComponent={handleUpdateComponent}
             onDeleteComponent={handleDeleteComponent}
+          />
+          
+          <ResultsPanel
+            results={simulationResults}
+            isSimulating={isSimulating}
           />
         </div>
       </div>
