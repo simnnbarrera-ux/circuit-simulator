@@ -71,13 +71,16 @@ function App() {
       return;
     }
     
+    // Crear conexiones automáticas basadas en proximidad si no hay conexiones manuales
+    let connectionsToUse = connections;
     if (connections.length === 0) {
-      alert('Conecta los componentes antes de iniciar la simulación');
-      return;
+      connectionsToUse = createAutoConnections(components);
+      setConnections(connectionsToUse);
+      console.log('Conexiones automáticas creadas:', connectionsToUse);
     }
     
     // Ejecutar simulación con conexiones
-    const result = simulateCircuit(components, connections);
+    const result = simulateCircuit(components, connectionsToUse);
     
     if (result.success) {
       setSimulationResults(result.results);
@@ -87,6 +90,35 @@ function App() {
       alert(`Error en la simulación: ${result.error}`);
       console.error('Error de simulación:', result.error);
     }
+  };
+
+  // Crear conexiones automáticas basadas en proximidad
+  const createAutoConnections = (comps) => {
+    const autoConnections = [];
+    const threshold = 100; // Distancia máxima para conectar automáticamente
+
+    for (let i = 0; i < comps.length; i++) {
+      for (let j = i + 1; j < comps.length; j++) {
+        const comp1 = comps[i];
+        const comp2 = comps[j];
+
+        // Calcular distancia entre componentes
+        const dx = comp1.x - comp2.x;
+        const dy = comp1.y - comp2.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < threshold) {
+          // Conectar terminal derecho de comp1 con terminal izquierdo de comp2
+          autoConnections.push({
+            id: `auto-conn-${i}-${j}`,
+            from: { componentId: comp1.id, terminal: 1 },
+            to: { componentId: comp2.id, terminal: 0 }
+          });
+        }
+      }
+    }
+
+    return autoConnections;
   };
 
   // Pausar simulación

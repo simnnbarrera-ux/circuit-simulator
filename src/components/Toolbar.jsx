@@ -7,7 +7,8 @@ import {
   FolderOpen,
   Trash2,
   Settings,
-  BarChart3
+  BarChart3,
+  Link2
 } from 'lucide-react';
 
 /**
@@ -21,7 +22,9 @@ const Toolbar = ({
   onClearCanvas,
   onSaveProject,
   onLoadProject,
-  onViewAnalysis
+  onViewAnalysis,
+  isConnectionMode,
+  onToggleConnectionMode
 }) => {
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
@@ -60,6 +63,16 @@ const Toolbar = ({
         >
           <RotateCcw className="w-4 h-4 mr-2" />
           Reiniciar
+        </Button>
+
+        <Button
+          onClick={onToggleConnectionMode}
+          className={isConnectionMode 
+            ? "bg-blue-600 hover:bg-blue-700 text-white" 
+            : "bg-gray-100 hover:bg-gray-200 text-gray-700"}
+        >
+          <Link2 className="w-4 h-4 mr-2" />
+          {isConnectionMode ? 'Modo Conexión: ON' : 'Conectar Componentes'}
         </Button>
 
         {isSimulating && (

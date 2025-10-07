@@ -73,8 +73,8 @@ const ResultsPanel = ({ results, isSimulating }) => {
             Componentes
           </h3>
           <div className="space-y-2">
-            {componentData.map((data) => (
-              <ComponentResultCard key={data.id} data={data} />
+            {Object.entries(componentData).map(([id, data]) => (
+              <ComponentResultCard key={id} data={{ ...data, id }} />
             ))}
           </div>
         </div>
@@ -152,33 +152,14 @@ const ComponentResultCard = ({ data }) => {
 };
 
 /**
- * Formatea valores con prefijos métricos
+ * Formatea valores sin prefijos (solo V, A, W)
  */
 const formatValue = (value, unit) => {
-  if (value === 0) return `0 ${unit}`;
+  if (value === 0) return `0.000000 ${unit}`;
   if (!isFinite(value)) return `∞ ${unit}`;
   
-  const absValue = Math.abs(value);
-  
-  const prefixes = [
-    { factor: 1e9, symbol: 'G' },
-    { factor: 1e6, symbol: 'M' },
-    { factor: 1e3, symbol: 'k' },
-    { factor: 1, symbol: '' },
-    { factor: 1e-3, symbol: 'm' },
-    { factor: 1e-6, symbol: 'μ' },
-    { factor: 1e-9, symbol: 'n' },
-    { factor: 1e-12, symbol: 'p' }
-  ];
-
-  for (const prefix of prefixes) {
-    if (absValue >= prefix.factor) {
-      const scaledValue = value / prefix.factor;
-      return `${scaledValue.toFixed(3)} ${prefix.symbol}${unit}`;
-    }
-  }
-
-  return `${value.toExponential(2)} ${unit}`;
+  // Formatear con 6 decimales
+  return `${value.toFixed(6)} ${unit}`;
 };
 
 export default ResultsPanel;

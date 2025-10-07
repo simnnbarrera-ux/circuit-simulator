@@ -9,37 +9,19 @@ const AnalysisModal = ({ isOpen, onClose, simulationResults, components }) => {
 
   const { nodeVoltages, componentData } = simulationResults || {};
 
-  // Formatear voltaje con unidades
+  // Formatear voltaje con unidades (siempre en V)
   const formatVoltage = (voltage) => {
-    if (Math.abs(voltage) >= 1000) {
-      return `${(voltage / 1000).toFixed(3)} kV`;
-    } else if (Math.abs(voltage) >= 1) {
-      return `${voltage.toFixed(3)} V`;
-    } else {
-      return `${(voltage * 1000).toFixed(3)} mV`;
-    }
+    return `${voltage.toFixed(6)} V`;
   };
 
-  // Formatear corriente con unidades
+  // Formatear corriente con unidades (siempre en A)
   const formatCurrent = (current) => {
-    if (Math.abs(current) >= 1) {
-      return `${current.toFixed(3)} A`;
-    } else if (Math.abs(current) >= 0.001) {
-      return `${(current * 1000).toFixed(3)} mA`;
-    } else {
-      return `${(current * 1000000).toFixed(3)} μA`;
-    }
+    return `${current.toFixed(6)} A`;
   };
 
-  // Formatear potencia con unidades
+  // Formatear potencia con unidades (siempre en W)
   const formatPower = (power) => {
-    if (Math.abs(power) >= 1000) {
-      return `${(power / 1000).toFixed(3)} kW`;
-    } else if (Math.abs(power) >= 1) {
-      return `${power.toFixed(3)} W`;
-    } else {
-      return `${(power * 1000).toFixed(3)} mW`;
-    }
+    return `${power.toFixed(6)} W`;
   };
 
   return (
@@ -99,8 +81,8 @@ const AnalysisModal = ({ isOpen, onClose, simulationResults, components }) => {
                   Análisis por Componente
                 </h3>
                 <div className="space-y-3">
-                  {componentData?.map((data, index) => {
-                    const component = components.find(c => c.id === data.id);
+                  {Object.entries(componentData || {}).map(([id, data]) => {
+                    const component = components.find(c => c.id === id);
                     const typeNames = {
                       voltage_source: 'Fuente de Voltaje',
                       current_source: 'Fuente de Corriente',
@@ -113,7 +95,7 @@ const AnalysisModal = ({ isOpen, onClose, simulationResults, components }) => {
 
                     return (
                       <div
-                        key={data.id || index}
+                        key={id}
                         className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4 border border-purple-200"
                       >
                         <div className="flex items-start justify-between mb-3">
@@ -122,7 +104,7 @@ const AnalysisModal = ({ isOpen, onClose, simulationResults, components }) => {
                               {component?.label || typeNames[data.type] || data.type}
                             </h4>
                             <p className="text-xs text-gray-500">
-                              {typeNames[data.type]} • ID: {data.id?.substring(0, 8)}...
+                              {typeNames[data.type]} • ID: {id?.substring(0, 8)}...
                             </p>
                           </div>
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${

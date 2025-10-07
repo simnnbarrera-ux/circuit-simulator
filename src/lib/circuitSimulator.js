@@ -1,6 +1,6 @@
 /**
  * Motor de simulación de circuitos eléctricos
- * Implementa análisis nodal (Modified Nodal Analysis - MNA) para resolver circuitos
+ * Implementa Análisis Nodal Modificado (MNA) para resolver circuitos
  */
 
 /**
@@ -10,37 +10,48 @@ export class CircuitSimulator {
   constructor(components, connections) {
     this.components = components;
     this.connections = connections || [];
-    this.nodes = new Map();
+    this.nodeMap = new Map(); // Mapeo de componentes a nodos
+    this.numNodes = 0;
     this.results = null;
   }
 
   /**
    * Ejecuta la simulación del circuito
-   * @returns {Object} Resultados de la simulación con voltajes y corrientes
    */
   simulate() {
     try {
+      console.log('=== INICIANDO SIMULACIÓN ===');
+      console.log('Componentes:', this.components);
+      console.log('Conexiones:', this.connections);
+
       // Validar que hay componentes
       if (!this.components || this.components.length === 0) {
         throw new Error('No hay componentes en el circuito');
       }
 
-      // Identificar nodos y conexiones
-      this.identifyNodes();
-
       // Validar que hay al menos un nodo de tierra
-      if (!this.hasGroundNode()) {
+      const hasGround = this.components.some(c => c.type === 'ground');
+      if (!hasGround) {
         throw new Error('El circuito debe tener al menos un nodo de tierra');
       }
 
-      // Construir el sistema de ecuaciones usando análisis nodal
-      const { A, b } = this.buildNodalEquations();
+      // Identificar nodos
+      this.identifyNodes();
+      console.log('Nodos identificados:', this.numNodes);
+      console.log('Mapa de nodos:', this.nodeMap);
 
-      // Resolver el sistema de ecuaciones lineales
-      const solution = this.solveLinearSystem(A, b);
+      // Construir sistema de ecuaciones
+      const { G, I } = this.buildSystem();
+      console.log('Matriz G:', G);
+      console.log('Vector I:', I);
+
+      // Resolver sistema
+      const voltages = this.solveSystem(G, I);
+      console.log('Voltajes calculados:', voltages);
 
       // Calcular corrientes y potencias
-      this.results = this.calculateResults(solution);
+      this.results = this.calculateResults(voltages);
+      console.log('Resultados finales:', this.results);
 
       return {
         success: true,
@@ -48,6 +59,7 @@ export class CircuitSimulator {
         message: 'Simulación completada exitosamente'
       };
     } catch (error) {
+      console.error('Error en simulación:', error);
       return {
         success: false,
         error: error.message,
@@ -57,336 +69,341 @@ export class CircuitSimulator {
   }
 
   /**
-   * Identifica los nodos del circuito basándose en las conexiones
+   * Identificar nodos del circuito basándose en conexiones
    */
   identifyNodes() {
-    this.nodes.clear();
-    
-    // Mapa de terminales a nodos
-    const terminalToNode = new Map();
-    let nextNodeId = 1;
+    // Resetear
+    this.nodeMap.clear();
+    let nodeCounter = 0;
 
-    // Función auxiliar para obtener clave de terminal
-    const getTerminalKey = (componentId, terminal) => `${componentId}-${terminal}`;
-
-    // Primero, identificar todos los nodos de tierra
-    this.components.forEach(component => {
-      if (component.type === 'ground') {
-        const terminalKey = getTerminalKey(component.id, 0);
-        terminalToNode.set(terminalKey, 0);
+    // Asignar nodo 0 a todas las tierras
+    this.components.forEach(comp => {
+      if (comp.type === 'ground') {
+        this.nodeMap.set(`${comp.id}-0`, 0);
+        this.nodeMap.set(`${comp.id}-1`, 0);
       }
     });
 
-    // Procesar conexiones para agrupar terminales en nodos
-    this.connections.forEach(connection => {
-      const fromKey = getTerminalKey(connection.from.componentId, connection.from.terminal);
-      const toKey = getTerminalKey(connection.to.componentId, connection.to.terminal);
+    // Procesar conexiones para asignar nodos
+    this.connections.forEach(conn => {
+      const fromKey = `${conn.from.componentId}-${conn.from.terminal}`;
+      const toKey = `${conn.to.componentId}-${conn.to.terminal}`;
 
-      const fromNode = terminalToNode.get(fromKey);
-      const toNode = terminalToNode.get(toKey);
+      let fromNode = this.nodeMap.get(fromKey);
+      let toNode = this.nodeMap.get(toKey);
 
-      if (fromNode !== undefined && toNode !== undefined) {
-        // Ambos terminales ya tienen nodo, unificar al menor
+      if (fromNode === undefined && toNode === undefined) {
+        // Ambos son nuevos, crear nuevo nodo
+        nodeCounter++;
+        this.nodeMap.set(fromKey, nodeCounter);
+        this.nodeMap.set(toKey, nodeCounter);
+      } else if (fromNode !== undefined && toNode === undefined) {
+        // From existe, asignar mismo nodo a to
+        this.nodeMap.set(toKey, fromNode);
+      } else if (fromNode === undefined && toNode !== undefined) {
+        // To existe, asignar mismo nodo a from
+        this.nodeMap.set(fromKey, toNode);
+      } else if (fromNode !== toNode) {
+        // Ambos existen pero son diferentes, unificar
         const minNode = Math.min(fromNode, toNode);
         const maxNode = Math.max(fromNode, toNode);
-        
-        // Reemplazar todas las referencias al nodo mayor por el menor
-        if (minNode !== maxNode) {
-          for (const [key, node] of terminalToNode.entries()) {
-            if (node === maxNode) {
-              terminalToNode.set(key, minNode);
-            }
+        // Reemplazar todas las referencias al nodo mayor
+        for (const [key, node] of this.nodeMap.entries()) {
+          if (node === maxNode) {
+            this.nodeMap.set(key, minNode);
           }
         }
-      } else if (fromNode !== undefined) {
-        // Solo from tiene nodo, asignar el mismo a to
-        terminalToNode.set(toKey, fromNode);
-      } else if (toNode !== undefined) {
-        // Solo to tiene nodo, asignar el mismo a from
-        terminalToNode.set(fromKey, toNode);
-      } else {
-        // Ninguno tiene nodo, crear uno nuevo
-        terminalToNode.set(fromKey, nextNodeId);
-        terminalToNode.set(toKey, nextNodeId);
-        nextNodeId++;
       }
     });
 
-    // Asignar nodos a los componentes
-    this.components.forEach(component => {
-      if (component.type === 'ground') {
-        component.node1 = 0;
-        component.node2 = 0;
-      } else {
-        const terminal0Key = getTerminalKey(component.id, 0);
-        const terminal1Key = getTerminalKey(component.id, 1);
-        
-        component.node1 = terminalToNode.get(terminal0Key) || nextNodeId++;
-        component.node2 = terminalToNode.get(terminal1Key) || nextNodeId++;
+    // Asignar nodos a terminales no conectados
+    this.components.forEach(comp => {
+      if (comp.type !== 'ground') {
+        for (let terminal = 0; terminal <= 1; terminal++) {
+          const key = `${comp.id}-${terminal}`;
+          if (!this.nodeMap.has(key)) {
+            nodeCounter++;
+            this.nodeMap.set(key, nodeCounter);
+          }
+        }
       }
     });
+
+    this.numNodes = nodeCounter + 1; // +1 para incluir el nodo 0
   }
 
   /**
-   * Verifica si el circuito tiene un nodo de tierra
+   * Obtener nodo de un terminal de componente
    */
-  hasGroundNode() {
-    return this.components.some(c => c.type === 'ground');
+  getNode(componentId, terminal) {
+    const key = `${componentId}-${terminal}`;
+    return this.nodeMap.get(key) || 0;
   }
 
   /**
-   * Construye las ecuaciones nodales del circuito
-   * Retorna la matriz A y el vector b del sistema Ax = b
+   * Construir sistema de ecuaciones G·V = I
    */
-  buildNodalEquations() {
-    const numNodes = this.getNumberOfNodes();
-    const numVoltageSources = this.getNumberOfVoltageSources();
-    const size = numNodes + numVoltageSources;
-
-    // Inicializar matrices
-    const A = Array(size).fill(0).map(() => Array(size).fill(0));
-    const b = Array(size).fill(0);
-
-    let vsIndex = numNodes; // Índice para fuentes de voltaje
+  buildSystem() {
+    const n = this.numNodes;
+    
+    // Inicializar matriz G (conductancias) y vector I (corrientes)
+    const G = Array(n).fill(0).map(() => Array(n).fill(0));
+    const I = Array(n).fill(0);
 
     // Procesar cada componente
-    this.components.forEach(component => {
-      const { type, value, node1, node2 } = component;
+    this.components.forEach(comp => {
+      const node1 = this.getNode(comp.id, 0);
+      const node2 = this.getNode(comp.id, 1);
 
-      if (node1 === 0 && node2 === 0) return; // Ignorar tierras
+      console.log(`Procesando ${comp.type} (${comp.id}): nodo ${node1} -> nodo ${node2}`);
 
-      switch (type) {
-        case 'resistor':
-          this.addResistor(A, b, node1, node2, value);
-          break;
-
+      switch (comp.type) {
         case 'voltage_source':
-          this.addVoltageSource(A, b, node1, node2, value, vsIndex);
-          component.currentIndex = vsIndex;
-          vsIndex++;
+          // Fuente de voltaje: V2 - V1 = V
+          // Usar método de superposición: agregar corriente equivalente
+          // I = V / R_pequeña (simulamos con resistencia muy pequeña)
+          const Req = 0.001; // 1mΩ
+          const Geq = 1 / Req;
+          const Ieq = comp.value / Req;
+
+          if (node1 !== 0) {
+            G[node1][node1] += Geq;
+            I[node1] -= Ieq;
+            if (node2 !== 0) {
+              G[node1][node2] -= Geq;
+            }
+          }
+          if (node2 !== 0) {
+            G[node2][node2] += Geq;
+            I[node2] += Ieq;
+            if (node1 !== 0) {
+              G[node2][node1] -= Geq;
+            }
+          }
           break;
 
         case 'current_source':
-          this.addCurrentSource(A, b, node1, node2, value);
+          // Fuente de corriente: inyecta corriente en los nodos
+          if (node1 !== 0) {
+            I[node1] -= comp.value;
+          }
+          if (node2 !== 0) {
+            I[node2] += comp.value;
+          }
+          break;
+
+        case 'resistor':
+          // Resistencia: G = 1/R
+          const conductance = 1 / comp.value;
+          if (node1 !== 0) {
+            G[node1][node1] += conductance;
+            if (node2 !== 0) {
+              G[node1][node2] -= conductance;
+            }
+          }
+          if (node2 !== 0) {
+            G[node2][node2] += conductance;
+            if (node1 !== 0) {
+              G[node2][node1] -= conductance;
+            }
+          }
           break;
 
         case 'capacitor':
-          // Para análisis DC, los capacitores actúan como circuito abierto
-          // En análisis AC o transitorio, se requiere implementación adicional
+          // Para análisis DC, capacitor es circuito abierto (conductancia = 0)
+          // No agregamos nada a la matriz
           break;
 
         case 'inductor':
-          // Para análisis DC, los inductores actúan como cortocircuito
-          // En análisis AC o transitorio, se requiere implementación adicional
-          this.addResistor(A, b, node1, node2, 0.001); // Resistencia muy pequeña
+          // Para análisis DC, inductor es cortocircuito (conductancia = infinito)
+          // Simulamos con resistencia muy pequeña
+          const Gind = 1 / 0.001;
+          if (node1 !== 0) {
+            G[node1][node1] += Gind;
+            if (node2 !== 0) {
+              G[node1][node2] -= Gind;
+            }
+          }
+          if (node2 !== 0) {
+            G[node2][node2] += Gind;
+            if (node1 !== 0) {
+              G[node2][node1] -= Gind;
+            }
+          }
           break;
 
         case 'led':
-          // Modelar LED como resistencia con caída de voltaje
-          const ledResistance = 100; // Resistencia típica de LED
-          this.addResistor(A, b, node1, node2, ledResistance);
+          // LED simplificado: resistencia + voltaje de umbral
+          // Para simplificar, usamos solo resistencia
+          const Rled = 100; // 100Ω
+          const Gled = 1 / Rled;
+          if (node1 !== 0) {
+            G[node1][node1] += Gled;
+            if (node2 !== 0) {
+              G[node1][node2] -= Gled;
+            }
+          }
+          if (node2 !== 0) {
+            G[node2][node2] += Gled;
+            if (node1 !== 0) {
+              G[node2][node1] -= Gled;
+            }
+          }
+          break;
+
+        case 'ground':
+          // Tierra ya está manejada (nodo 0)
           break;
       }
     });
 
-    return { A, b };
+    // Fijar nodo 0 (tierra) a 0V
+    G[0] = Array(n).fill(0);
+    G[0][0] = 1;
+    I[0] = 0;
+
+    return { G, I };
   }
 
   /**
-   * Agrega una resistencia al sistema de ecuaciones
+   * Resolver sistema lineal G·V = I usando eliminación gaussiana
    */
-  addResistor(A, b, node1, node2, resistance) {
-    if (resistance === 0) resistance = 0.001; // Evitar división por cero
-
-    const conductance = 1 / resistance;
-
-    if (node1 !== 0) {
-      A[node1 - 1][node1 - 1] += conductance;
-      if (node2 !== 0) {
-        A[node1 - 1][node2 - 1] -= conductance;
-      }
-    }
-
-    if (node2 !== 0) {
-      A[node2 - 1][node2 - 1] += conductance;
-      if (node1 !== 0) {
-        A[node2 - 1][node1 - 1] -= conductance;
-      }
-    }
-  }
-
-  /**
-   * Agrega una fuente de voltaje al sistema de ecuaciones
-   */
-  addVoltageSource(A, b, node1, node2, voltage, vsIndex) {
-    // Ecuación de restricción de voltaje
-    if (node1 !== 0) {
-      A[vsIndex][node1 - 1] = 1;
-      A[node1 - 1][vsIndex] = 1;
-    }
-    if (node2 !== 0) {
-      A[vsIndex][node2 - 1] = -1;
-      A[node2 - 1][vsIndex] = -1;
-    }
-
-    b[vsIndex] = voltage;
-  }
-
-  /**
-   * Agrega una fuente de corriente al sistema de ecuaciones
-   */
-  addCurrentSource(A, b, node1, node2, current) {
-    if (node1 !== 0) {
-      b[node1 - 1] -= current;
-    }
-    if (node2 !== 0) {
-      b[node2 - 1] += current;
-    }
-  }
-
-  /**
-   * Obtiene el número de nodos (excluyendo tierra)
-   */
-  getNumberOfNodes() {
-    let maxNode = 0;
-    this.components.forEach(component => {
-      if (component.node1 > maxNode) maxNode = component.node1;
-      if (component.node2 > maxNode) maxNode = component.node2;
-    });
-    return maxNode;
-  }
-
-  /**
-   * Obtiene el número de fuentes de voltaje
-   */
-  getNumberOfVoltageSources() {
-    return this.components.filter(c => c.type === 'voltage_source').length;
-  }
-
-  /**
-   * Resuelve el sistema de ecuaciones lineales Ax = b
-   * Usa eliminación gaussiana con pivoteo parcial
-   */
-  solveLinearSystem(A, b) {
-    const n = A.length;
-    const augmented = A.map((row, i) => [...row, b[i]]);
+  solveSystem(G, I) {
+    const n = G.length;
+    
+    // Crear copia para no modificar originales
+    const A = G.map(row => [...row]);
+    const b = [...I];
 
     // Eliminación gaussiana con pivoteo parcial
-    for (let i = 0; i < n; i++) {
-      // Buscar el pivote máximo
-      let maxRow = i;
-      for (let k = i + 1; k < n; k++) {
-        if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
-          maxRow = k;
+    for (let k = 0; k < n; k++) {
+      // Buscar pivote
+      let maxRow = k;
+      for (let i = k + 1; i < n; i++) {
+        if (Math.abs(A[i][k]) > Math.abs(A[maxRow][k])) {
+          maxRow = i;
         }
       }
 
       // Intercambiar filas
-      [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
+      [A[k], A[maxRow]] = [A[maxRow], A[k]];
+      [b[k], b[maxRow]] = [b[maxRow], b[k]];
 
-      // Hacer ceros debajo del pivote
-      for (let k = i + 1; k < n; k++) {
-        const factor = augmented[k][i] / augmented[i][i];
-        for (let j = i; j <= n; j++) {
-          augmented[k][j] -= factor * augmented[i][j];
+      // Verificar que el pivote no es cero
+      if (Math.abs(A[k][k]) < 1e-10) {
+        console.warn(`Pivote muy pequeño en fila ${k}`);
+        continue;
+      }
+
+      // Eliminación
+      for (let i = k + 1; i < n; i++) {
+        const factor = A[i][k] / A[k][k];
+        for (let j = k; j < n; j++) {
+          A[i][j] -= factor * A[k][j];
         }
+        b[i] -= factor * b[k];
       }
     }
 
     // Sustitución hacia atrás
-    const solution = Array(n).fill(0);
+    const x = Array(n).fill(0);
     for (let i = n - 1; i >= 0; i--) {
-      solution[i] = augmented[i][n];
+      let sum = 0;
       for (let j = i + 1; j < n; j++) {
-        solution[i] -= augmented[i][j] * solution[j];
+        sum += A[i][j] * x[j];
       }
-      solution[i] /= augmented[i][i];
+      x[i] = (b[i] - sum) / A[i][i];
+      
+      // Manejar NaN o Infinity
+      if (!isFinite(x[i])) {
+        x[i] = 0;
+      }
     }
 
-    return solution;
+    return x;
   }
 
   /**
-   * Calcula corrientes y potencias basándose en los voltajes nodales
+   * Calcular corrientes y potencias en cada componente
    */
-  calculateResults(solution) {
-    const numNodes = this.getNumberOfNodes();
-    const results = {
-      nodeVoltages: {},
-      componentData: []
-    };
+  calculateResults(voltages) {
+    const nodeVoltages = {};
+    const componentData = {};
 
     // Guardar voltajes nodales
-    for (let i = 0; i < numNodes; i++) {
-      results.nodeVoltages[i + 1] = solution[i] || 0;
+    for (let i = 0; i < voltages.length; i++) {
+      nodeVoltages[i] = voltages[i];
     }
-    results.nodeVoltages[0] = 0; // Tierra
 
-    // Calcular corrientes y potencias para cada componente
-    this.components.forEach(component => {
-      const { type, value, node1, node2, id } = component;
-      const v1 = results.nodeVoltages[node1] || 0;
-      const v2 = results.nodeVoltages[node2] || 0;
-      const voltage = v1 - v2;
+    // Calcular datos por componente
+    this.components.forEach(comp => {
+      const node1 = this.getNode(comp.id, 0);
+      const node2 = this.getNode(comp.id, 1);
+      const V1 = voltages[node1] || 0;
+      const V2 = voltages[node2] || 0;
+      const Vdrop = V2 - V1; // Voltaje a través del componente
 
       let current = 0;
       let power = 0;
 
-      switch (type) {
-        case 'resistor':
-          current = voltage / value;
-          power = current * voltage;
-          break;
-
+      switch (comp.type) {
         case 'voltage_source':
-          if (component.currentIndex !== undefined) {
-            current = solution[component.currentIndex] || 0;
-            power = current * value;
-          }
+          // Corriente = (V2 - V1 - Vsource) / R_equivalente
+          current = (Vdrop - comp.value) / 0.001;
+          power = comp.value * current;
           break;
 
         case 'current_source':
-          current = value;
-          power = current * voltage;
+          current = comp.value;
+          power = Vdrop * current;
           break;
 
-        case 'led':
-          current = voltage / 100; // Resistencia típica de LED
-          power = current * voltage;
+        case 'resistor':
+          current = Vdrop / comp.value;
+          power = Vdrop * current;
           break;
 
         case 'capacitor':
+          // DC: sin corriente
+          current = 0;
+          power = 0;
+          break;
+
         case 'inductor':
-          // En análisis DC, corriente es 0 para capacitores
+          current = Vdrop / 0.001;
+          power = Vdrop * current;
+          break;
+
+        case 'led':
+          current = Vdrop / 100;
+          power = Vdrop * current;
+          break;
+
+        case 'ground':
           current = 0;
           power = 0;
           break;
       }
 
-      results.componentData.push({
-        id,
-        type,
-        voltage: Math.abs(voltage),
-        current: Math.abs(current),
-        power: Math.abs(power),
-        node1Voltage: v1,
-        node2Voltage: v2
-      });
+      componentData[comp.id] = {
+        type: comp.type,
+        label: comp.label || comp.type,
+        voltage: Vdrop,
+        current: current,
+        power: power,
+        nodes: [node1, node2]
+      };
     });
 
-    return results;
-  }
-
-  /**
-   * Obtiene los resultados de la última simulación
-   */
-  getResults() {
-    return this.results;
+    return {
+      nodeVoltages,
+      componentData
+    };
   }
 }
 
 /**
- * Función auxiliar para ejecutar una simulación rápida
+ * Función helper para simular circuito
  */
 export function simulateCircuit(components, connections) {
   const simulator = new CircuitSimulator(components, connections);
