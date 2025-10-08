@@ -6,6 +6,7 @@ import CircuitCanvas from './components/CircuitCanvas';
 import PropertiesPanel from './components/PropertiesPanel';
 import ResultsPanel from './components/ResultsPanel';
 import AnalysisModal from './components/AnalysisModal';
+import Multimeter from './components/Multimeter';
 import { simulateCircuit } from './lib/circuitSimulator';
 
 /**
@@ -212,7 +213,7 @@ function App() {
           />
         </div>
 
-        {/* Panel derecho: Propiedades y Resultados */}
+        {/* Panel derecho: Propiedades, Resultados y Multímetro */}
         <div className="w-80 bg-gray-50 p-4 border-l border-gray-200 overflow-y-auto space-y-4">
           <PropertiesPanel
             component={selectedComponent}
@@ -224,6 +225,14 @@ function App() {
             results={simulationResults}
             isSimulating={isSimulating}
           />
+
+          {isSimulating && (
+            <Multimeter
+              simulationResults={simulationResults}
+              components={components}
+              connections={connections}
+            />
+          )}
         </div>
       </div>
 

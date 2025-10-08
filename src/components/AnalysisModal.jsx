@@ -180,7 +180,7 @@ const AnalysisModal = ({ isOpen, onClose, simulationResults, components }) => {
                       <div className="text-xs text-gray-500 font-medium">Potencia Total</div>
                       <div className="text-2xl font-bold text-green-600">
                         {formatPower(
-                          componentData?.reduce((sum, data) => sum + Math.abs(data.power || 0), 0) || 0
+                          Object.values(componentData || {}).reduce((sum, data) => sum + Math.abs(data.power || 0), 0)
                         )}
                       </div>
                     </div>
