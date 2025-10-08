@@ -27,7 +27,7 @@ const ResultsPanel = ({ results, isSimulating }) => {
     );
   }
 
-  const { componentData, nodeVoltages } = results;
+  const { componentData = {}, nodeVoltages = {} } = results || {};
 
   return (
     <Card className="h-full overflow-y-auto">
@@ -50,7 +50,7 @@ const ResultsPanel = ({ results, isSimulating }) => {
             Voltajes Nodales
           </h3>
           <div className="space-y-1">
-            {Object.entries(nodeVoltages).map(([node, voltage]) => (
+            {Object.entries(nodeVoltages || {}).map(([node, voltage]) => (
               <div 
                 key={node} 
                 className="flex justify-between items-center text-sm bg-blue-50 px-3 py-2 rounded"
@@ -73,7 +73,7 @@ const ResultsPanel = ({ results, isSimulating }) => {
             Componentes
           </h3>
           <div className="space-y-2">
-            {Object.entries(componentData).map(([id, data]) => (
+            {Object.entries(componentData || {}).map(([id, data]) => (
               <ComponentResultCard key={id} data={{ ...data, id }} />
             ))}
           </div>

@@ -7,6 +7,7 @@ import PropertiesPanel from './components/PropertiesPanel';
 import ResultsPanel from './components/ResultsPanel';
 import AnalysisModal from './components/AnalysisModal';
 import Multimeter from './components/Multimeter';
+import WelcomeGuide from './components/WelcomeGuide';
 import { simulateCircuit } from './lib/circuitSimulator';
 
 /**
@@ -31,13 +32,57 @@ function App() {
   // Estado del modal de análisis
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
 
+  // Estado del multímetro flotante
+  const [showMultimeter, setShowMultimeter] = useState(false);
+
+  // Estado de la guía de bienvenida
+  const [showWelcomeGuide, setShowWelcomeGuide] = useState(true);
+
+  // Contadores para IDs automáticos
+  const [componentCounters, setComponentCounters] = useState({
+    voltage_source: 0,
+    current_source: 0,
+    resistor: 0,
+    capacitor: 0,
+    inductor: 0,
+    led: 0,
+    ground: 0
+  });
+
   // Obtener el componente seleccionado
   const selectedComponent = components.find(c => c.id === selectedComponentId);
 
+  // Función para generar ID legible (R1, C2, V1, etc.)
+  const generateReadableId = (type) => {
+    const prefixes = {
+      voltage_source: 'V',
+      current_source: 'I',
+      resistor: 'R',
+      capacitor: 'C',
+      inductor: 'L',
+      led: 'D',
+      ground: 'GND'
+    };
+
+    const newCount = componentCounters[type] + 1;
+    setComponentCounters({
+      ...componentCounters,
+      [type]: newCount
+    });
+
+    return `${prefixes[type]}${newCount}`;
+  };
+
   // Agregar un nuevo componente al canvas
   const handleAddComponent = (component) => {
-    setComponents([...components, component]);
-    setSelectedComponentId(component.id);
+    const readableId = generateReadableId(component.type);
+    const componentWithId = {
+      ...component,
+      readableId: readableId,
+      label: readableId // Usar el ID como etiqueta por defecto
+    };
+    setComponents([...components, componentWithId]);
+    setSelectedComponentId(componentWithId.id);
   };
 
   // Actualizar un componente existente
@@ -53,211 +98,219 @@ function App() {
     if (selectedComponentId === componentId) {
       setSelectedComponentId(null);
     }
+    // Eliminar conexiones relacionadas
+    setConnections(connections.filter(
+      conn => conn.from !== componentId && conn.to !== componentId
+    ));
   };
 
-  // Limpiar el canvas
-  const handleClearCanvas = () => {
-    if (confirm('¿Estás seguro de que deseas eliminar todos los componentes?')) {
-      setComponents([]);
-      setConnections([]);
-      setSelectedComponentId(null);
-      setSimulationResults(null);
-    }
+  // Seleccionar un componente
+  const handleSelectComponent = (componentId) => {
+    setSelectedComponentId(componentId);
   };
 
   // Iniciar simulación
   const handleStartSimulation = () => {
-    if (components.length === 0) {
-      alert('Agrega componentes al canvas antes de iniciar la simulación');
-      return;
-    }
-    
-    // Crear conexiones automáticas basadas en proximidad si no hay conexiones manuales
-    let connectionsToUse = connections;
-    if (connections.length === 0) {
-      connectionsToUse = createAutoConnections(components);
-      setConnections(connectionsToUse);
-      console.log('Conexiones automáticas creadas:', connectionsToUse);
-    }
-    
-    // Ejecutar simulación con conexiones
-    const result = simulateCircuit(components, connectionsToUse);
-    
-    if (result.success) {
-      setSimulationResults(result.results);
-      setIsSimulating(true);
-      console.log('Simulación exitosa:', result.results);
-    } else {
-      alert(`Error en la simulación: ${result.error}`);
-      console.error('Error de simulación:', result.error);
-    }
-  };
+    try {
+      // Validar que haya componentes
+      if (components.length === 0) {
+        alert('Agrega componentes al circuito antes de iniciar la simulación.');
+        return;
+      }
 
-  // Crear conexiones automáticas basadas en proximidad
-  const createAutoConnections = (comps) => {
-    const autoConnections = [];
-    const threshold = 100; // Distancia máxima para conectar automáticamente
+      // Validar que haya al menos una tierra
+      const hasGround = components.some(c => c.type === 'ground');
+      if (!hasGround) {
+        alert('El circuito debe tener al menos un componente de tierra (referencia).');
+        return;
+      }
 
-    for (let i = 0; i < comps.length; i++) {
-      for (let j = i + 1; j < comps.length; j++) {
-        const comp1 = comps[i];
-        const comp2 = comps[j];
+      // Crear conexiones automáticas basadas en proximidad
+      const autoConnections = [];
+      const proximityThreshold = 150;
 
-        // Calcular distancia entre componentes
-        const dx = comp1.x - comp2.x;
-        const dy = comp1.y - comp2.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+      for (let i = 0; i < components.length; i++) {
+        for (let j = i + 1; j < components.length; j++) {
+          const comp1 = components[i];
+          const comp2 = components[j];
+          const distance = Math.sqrt(
+            Math.pow(comp1.x - comp2.x, 2) + Math.pow(comp1.y - comp2.y, 2)
+          );
 
-        if (distance < threshold) {
-          // Conectar terminal derecho de comp1 con terminal izquierdo de comp2
-          autoConnections.push({
-            id: `auto-conn-${i}-${j}`,
-            from: { componentId: comp1.id, terminal: 1 },
-            to: { componentId: comp2.id, terminal: 0 }
-          });
+          if (distance < proximityThreshold) {
+            autoConnections.push({
+              from: comp1.id,
+              to: comp2.id,
+              fromTerminal: 1,
+              toTerminal: 0
+            });
+          }
         }
       }
-    }
 
-    return autoConnections;
+      setConnections(autoConnections);
+      console.log('Conexiones automáticas creadas:', autoConnections);
+
+      // Ejecutar simulación
+      const simulationOutput = simulateCircuit(components, autoConnections);
+      console.log('Resultados de simulación:', simulationOutput);
+      
+      // Guardar resultados completos incluyendo nodeMap
+      setSimulationResults(simulationOutput);
+      setIsSimulating(true);
+      setShowMultimeter(true); // Mostrar multímetro automáticamente
+    } catch (error) {
+      console.error('Error en la simulación:', error);
+      alert(`Error en la simulación: ${error.message}`);
+    }
   };
 
   // Pausar simulación
   const handlePauseSimulation = () => {
     setIsSimulating(false);
+    setShowMultimeter(false);
   };
 
   // Reiniciar simulación
   const handleResetSimulation = () => {
     setIsSimulating(false);
     setSimulationResults(null);
+    setConnections([]);
+    setShowMultimeter(false);
   };
 
-  // Guardar proyecto
-  const handleSaveProject = () => {
-    const projectData = {
-      components,
-      timestamp: new Date().toISOString()
-    };
-    
-    const dataStr = JSON.stringify(projectData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `circuito-${Date.now()}.json`;
-    link.click();
-    
-    URL.revokeObjectURL(url);
+  // Limpiar canvas
+  const handleClearCanvas = () => {
+    setComponents([]);
+    setConnections([]);
+    setSelectedComponentId(null);
+    setIsSimulating(false);
+    setSimulationResults(null);
+    setShowMultimeter(false);
+    // Reiniciar contadores
+    setComponentCounters({
+      voltage_source: 0,
+      current_source: 0,
+      resistor: 0,
+      capacitor: 0,
+      inductor: 0,
+      led: 0,
+      ground: 0
+    });
   };
 
-  // Cargar proyecto
-  const handleLoadProject = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          const projectData = JSON.parse(event.target.result);
-          setComponents(projectData.components || []);
-          setSelectedComponentId(null);
-          setSimulationResults(null);
-        } catch (error) {
-          alert('Error al cargar el archivo. Asegúrate de que sea un archivo válido.');
-          console.error(error);
-        }
-      };
-      reader.readAsText(file);
-    };
-    
-    input.click();
+  // Estado para modo de conexión manual
+  const [isManualConnectionMode, setIsManualConnectionMode] = useState(false);
+
+  // Conectar componentes manualmente
+  const handleConnectComponents = () => {
+    setIsManualConnectionMode(!isManualConnectionMode);
   };
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-      {/* Barra de herramientas superior */}
+      {/* Toolbar superior */}
       <Toolbar
         isSimulating={isSimulating}
         onStartSimulation={handleStartSimulation}
         onPauseSimulation={handlePauseSimulation}
         onResetSimulation={handleResetSimulation}
         onClearCanvas={handleClearCanvas}
-        onSaveProject={handleSaveProject}
-        onLoadProject={handleLoadProject}
+        onConnectComponents={handleConnectComponents}
         onViewAnalysis={() => setShowAnalysisModal(true)}
+        onToggleMultimeter={() => setShowMultimeter(!showMultimeter)}
+        showMultimeter={showMultimeter}
+        showManualConnectionMode={isManualConnectionMode}
       />
 
-      {/* Área de trabajo principal */}
+      {/* Contenedor principal */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Panel izquierdo: Biblioteca de componentes */}
-        <div className="w-64 bg-gray-50 p-4 border-r border-gray-200 overflow-y-auto">
+        {/* Panel izquierdo - Biblioteca de componentes */}
+        <div className="w-64 border-r border-gray-200 bg-white overflow-y-auto">
           <ComponentLibrary onAddComponent={handleAddComponent} />
         </div>
 
         {/* Canvas central */}
-        <div className="flex-1 p-4">
+        <div className="flex-1 relative">
           <CircuitCanvas
             components={components}
-            onComponentsChange={setComponents}
-            selectedComponent={selectedComponentId}
-            onSelectComponent={setSelectedComponentId}
             connections={connections}
-            onConnectionsChange={setConnections}
+            selectedComponentId={selectedComponentId}
+            onSelectComponent={handleSelectComponent}
+            onUpdateComponent={handleUpdateComponent}
+            onAddConnection={(conn) => setConnections([...connections, conn])}
+            isSimulating={isSimulating}
+            simulationResults={simulationResults}
+            isManualConnectionMode={isManualConnectionMode}
           />
         </div>
 
-        {/* Panel derecho: Propiedades, Resultados y Multímetro */}
-        <div className="w-80 bg-gray-50 p-4 border-l border-gray-200 overflow-y-auto space-y-4">
+        {/* Panel derecho - Propiedades y Resultados */}
+        <div className="w-80 border-l border-gray-200 bg-white overflow-y-auto">
           <PropertiesPanel
-            component={selectedComponent}
+            selectedComponent={selectedComponent}
             onUpdateComponent={handleUpdateComponent}
             onDeleteComponent={handleDeleteComponent}
           />
           
           <ResultsPanel
-            results={simulationResults}
+            results={simulationResults?.results || simulationResults}
             isSimulating={isSimulating}
           />
-
-          {isSimulating && (
-            <Multimeter
-              simulationResults={simulationResults}
-              components={components}
-              connections={connections}
-            />
-          )}
         </div>
       </div>
+
+      {/* Multímetro flotante */}
+      {showMultimeter && isSimulating && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white rounded-lg shadow-2xl border-2 border-gray-300 w-96">
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-t-lg flex items-center justify-between">
+            <h3 className="font-bold">🔬 Multímetro Digital</h3>
+            <button
+              onClick={() => setShowMultimeter(false)}
+              className="text-white hover:text-gray-200 font-bold text-xl"
+            >
+              ×
+            </button>
+          </div>
+          <Multimeter
+            simulationResults={simulationResults?.results || simulationResults}
+            components={components}
+            connections={connections}
+          />
+        </div>
+      )}
+
+      {/* Modal de análisis */}
+      {showAnalysisModal && (
+        <AnalysisModal
+          results={simulationResults?.results || simulationResults}
+          onClose={() => setShowAnalysisModal(false)}
+        />
+      )}
 
       {/* Barra de estado inferior */}
       <div className="bg-white border-t border-gray-200 px-4 py-2 flex items-center justify-between text-sm text-gray-600">
-        <div className="flex items-center gap-4">
-          <span>Componentes: {components.length}</span>
-          {selectedComponent && (
-            <span className="text-blue-600">
-              • Seleccionado: {selectedComponent.label || selectedComponent.type}
-            </span>
-          )}
+        <div>
+          Componentes: {components.length} {selectedComponent && `• Seleccionado: ${selectedComponent.readableId || selectedComponent.label}`}
         </div>
-        <div className="text-xs text-gray-400">
-          v1.0.0 | SibaruCircuits
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setShowWelcomeGuide(true)}
+            className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+          >
+            <span>❓</span>
+            <span>Ayuda</span>
+          </button>
+          <div className="text-xs text-gray-400">
+            v1.0.0 | SibaruCircuits
+          </div>
         </div>
       </div>
 
-      {/* Modal de análisis */}
-      <AnalysisModal
-        isOpen={showAnalysisModal}
-        onClose={() => setShowAnalysisModal(false)}
-        simulationResults={simulationResults}
-        components={components}
-      />
+      {/* Guía de bienvenida */}
+      {showWelcomeGuide && (
+        <WelcomeGuide onClose={() => setShowWelcomeGuide(false)} />
+      )}
     </div>
   );
 }

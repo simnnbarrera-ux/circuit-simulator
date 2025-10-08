@@ -1,22 +1,19 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.jsx';
-import { Button } from '@/components/ui/button.jsx';
-import { Gauge, Zap, Activity } from 'lucide-react';
 
 /**
  * Multimeter - Multímetro interactivo estilo Tinkercad
  * Permite medir voltaje, corriente y resistencia en el circuito
  */
-const Multimeter = ({ simulationResults, components, connections, onMeasure }) => {
+const Multimeter = ({ simulationResults, components, connections }) => {
   const [mode, setMode] = useState('voltage'); // 'voltage', 'current', 'resistance'
   const [selectedComponent, setSelectedComponent] = useState(null);
   const [measurement, setMeasurement] = useState(null);
 
   // Modos del multímetro
   const modes = [
-    { id: 'voltage', label: 'Voltaje (V)', icon: Zap, color: 'blue' },
-    { id: 'current', label: 'Corriente (A)', icon: Activity, color: 'green' },
-    { id: 'resistance', label: 'Resistencia (Ω)', icon: Gauge, color: 'yellow' }
+    { id: 'voltage', label: 'Voltaje', unit: 'V', icon: '⚡', color: 'blue' },
+    { id: 'current', label: 'Corriente', unit: 'A', icon: '🔋', color: 'green' },
+    { id: 'resistance', label: 'Resistencia', unit: 'Ω', icon: '📊', color: 'yellow' }
   ];
 
   // Realizar medición
@@ -55,204 +52,185 @@ const Multimeter = ({ simulationResults, components, connections, onMeasure }) =
 
     setMeasurement({ value, unit, error: null });
     setSelectedComponent(componentId);
-
-    if (onMeasure) {
-      onMeasure({ componentId, mode, value });
-    }
   };
 
   // Obtener unidad según el modo
   const getUnit = (mode) => {
-    switch (mode) {
-      case 'voltage': return 'V';
-      case 'current': return 'A';
-      case 'resistance': return 'Ω';
-      default: return '';
-    }
+    const modeObj = modes.find(m => m.id === mode);
+    return modeObj ? modeObj.unit : '';
   };
 
-  // Formatear valor con 6 decimales
+  // Formatear valor con decimales apropiados
   const formatValue = (value) => {
     if (value === 0) return '0.000000';
     if (!isFinite(value)) return '∞';
+    
+    // Formatear con notación científica si es muy pequeño o muy grande
+    if (Math.abs(value) < 0.001 || Math.abs(value) > 1000000) {
+      return value.toExponential(4);
+    }
+    
     return value.toFixed(6);
   };
 
   // Obtener color del modo actual
-  const getCurrentModeColor = () => {
-    const currentMode = modes.find(m => m.id === mode);
-    return currentMode ? currentMode.color : 'gray';
+  const getCurrentMode = () => {
+    return modes.find(m => m.id === mode);
   };
 
-  return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Gauge className="w-5 h-5 text-red-600" />
-          Multímetro Digital
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Selector de modo */}
-        <div>
-          <label className="text-sm font-medium text-gray-700 block mb-2">
-            Modo de Medición
-          </label>
-          <div className="grid grid-cols-3 gap-2">
-            {modes.map((m) => {
-              const Icon = m.icon;
-              return (
-                <Button
-                  key={m.id}
-                  onClick={() => {
-                    setMode(m.id);
-                    setMeasurement(null);
-                    setSelectedComponent(null);
-                  }}
-                  variant={mode === m.id ? 'default' : 'outline'}
-                  className={`flex flex-col items-center gap-1 h-auto py-2 ${
-                    mode === m.id
-                      ? `bg-${m.color}-600 hover:bg-${m.color}-700 text-white`
-                      : ''
-                  }`}
-                  style={
-                    mode === m.id
-                      ? {
-                          backgroundColor:
-                            m.color === 'blue'
-                              ? '#2563eb'
-                              : m.color === 'green'
-                              ? '#16a34a'
-                              : '#eab308',
-                        }
-                      : {}
-                  }
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-xs">{m.label}</span>
-                </Button>
-              );
-            })}
-          </div>
-        </div>
+  const currentMode = getCurrentMode();
 
-        {/* Display del multímetro */}
-        <div
-          className={`bg-gray-900 rounded-lg p-6 border-4 border-${getCurrentModeColor()}-500`}
-          style={{
-            borderColor:
-              getCurrentModeColor() === 'blue'
-                ? '#3b82f6'
-                : getCurrentModeColor() === 'green'
-                ? '#22c55e'
-                : '#facc15',
-          }}
-        >
+  return (
+    <div className="p-4">
+      {/* Selector de modo */}
+      <div className="mb-4">
+        <label className="text-sm font-semibold text-gray-700 block mb-2">
+          Modo de Medición
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {modes.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => {
+                setMode(m.id);
+                setMeasurement(null);
+                setSelectedComponent(null);
+              }}
+              className={`flex flex-col items-center gap-1 py-3 px-2 rounded-lg border-2 transition-all ${
+                mode === m.id
+                  ? 'bg-blue-600 text-white border-blue-700 shadow-lg'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+              }`}
+            >
+              <span className="text-2xl">{m.icon}</span>
+              <span className="text-xs font-semibold">{m.label}</span>
+              <span className="text-xs opacity-80">({m.unit})</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Display del multímetro - Pantalla LCD */}
+      <div className="mb-4 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl p-6 border-4 border-gray-700 shadow-inner">
+        <div className="bg-green-900 rounded-lg p-4 border-2 border-green-950">
           <div className="text-center">
-            <div className="text-5xl font-mono font-bold text-green-400 mb-2">
-              {measurement ? formatValue(measurement.value) : '---'}
+            {/* Indicador de modo */}
+            <div className="text-xs text-green-400 mb-2 font-mono">
+              {currentMode.icon} {currentMode.label.toUpperCase()}
             </div>
-            <div className="text-xl font-semibold text-green-300">
-              {measurement ? measurement.unit : getUnit(mode)}
+            
+            {/* Valor principal */}
+            <div className="text-5xl font-mono font-bold text-green-400 mb-1 tracking-wider">
+              {measurement ? formatValue(measurement.value) : '----.----'}
             </div>
+            
+            {/* Unidad */}
+            <div className="text-2xl font-semibold text-green-300 mb-2">
+              {measurement ? measurement.unit : currentMode.unit}
+            </div>
+            
+            {/* Error o estado */}
             {measurement && measurement.error && (
-              <div className="text-sm text-red-400 mt-2">{measurement.error}</div>
+              <div className="text-sm text-red-400 mt-2 animate-pulse">
+                ⚠️ {measurement.error}
+              </div>
+            )}
+            
+            {!measurement && (
+              <div className="text-xs text-green-500 opacity-70">
+                Selecciona un componente para medir
+              </div>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Selector de componente */}
-        <div>
-          <label className="text-sm font-medium text-gray-700 block mb-2">
-            Seleccionar Componente
-          </label>
-          <select
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={selectedComponent || ''}
-            onChange={(e) => {
-              const componentId = e.target.value;
-              if (componentId) {
-                handleMeasure(componentId);
-              }
-            }}
-          >
-            <option value="">-- Selecciona un componente --</option>
-            {components
-              .filter((c) => c.type !== 'ground')
-              .map((component) => {
-                const typeNames = {
-                  voltage_source: 'Fuente V',
-                  current_source: 'Fuente I',
-                  resistor: 'Resistencia',
-                  capacitor: 'Capacitor',
-                  inductor: 'Inductor',
-                  led: 'LED',
-                };
-                return (
-                  <option key={component.id} value={component.id}>
-                    {component.label || typeNames[component.type] || component.type} (
-                    {component.id.substring(0, 8)}...)
-                  </option>
-                );
-              })}
-          </select>
-        </div>
+      {/* Selector de componente */}
+      <div className="mb-4">
+        <label className="text-sm font-semibold text-gray-700 block mb-2">
+          🎯 Seleccionar Componente
+        </label>
+        <select
+          className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-800"
+          value={selectedComponent || ''}
+          onChange={(e) => {
+            const componentId = e.target.value;
+            if (componentId) {
+              handleMeasure(componentId);
+            } else {
+              setMeasurement(null);
+              setSelectedComponent(null);
+            }
+          }}
+        >
+          <option value="">-- Selecciona un componente --</option>
+          {components
+            .filter((c) => c.type !== 'ground')
+            .map((component) => {
+              const typeNames = {
+                voltage_source: '🔴 Fuente de Voltaje',
+                current_source: '🔵 Fuente de Corriente',
+                resistor: '🟡 Resistencia',
+                capacitor: '🟢 Capacitor',
+                inductor: '🟣 Inductor',
+                led: '🟠 LED',
+              };
+              const readableId = component.readableId || component.label || component.id.substring(0, 8);
+              return (
+                <option key={component.id} value={component.id}>
+                  {typeNames[component.type] || component.type} - {readableId}
+                </option>
+              );
+            })}
+        </select>
+      </div>
 
-        {/* Información adicional */}
-        {measurement && !measurement.error && selectedComponent && (
-          <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-            <div className="text-xs font-medium text-blue-900 mb-2">
-              Información del Componente
+      {/* Información adicional del componente */}
+      {measurement && !measurement.error && selectedComponent && simulationResults && simulationResults.componentData[selectedComponent] && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border-2 border-blue-200 mb-4">
+          <div className="text-sm font-bold text-blue-900 mb-3 flex items-center gap-2">
+            <span>📋</span>
+            <span>Información Completa del Componente</span>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between items-center bg-white rounded px-3 py-2">
+              <span className="font-semibold text-gray-700">⚡ Voltaje:</span>
+              <span className="font-mono text-blue-600">
+                {formatValue(Math.abs(simulationResults.componentData[selectedComponent].voltage || 0))} V
+              </span>
             </div>
-            <div className="text-xs text-blue-700 space-y-1">
-              {simulationResults && simulationResults.componentData[selectedComponent] && (
-                <>
-                  <div>
-                    <span className="font-semibold">Voltaje:</span>{' '}
-                    {formatValue(
-                      Math.abs(
-                        simulationResults.componentData[selectedComponent].voltage || 0
-                      )
-                    )}{' '}
-                    V
-                  </div>
-                  <div>
-                    <span className="font-semibold">Corriente:</span>{' '}
-                    {formatValue(
-                      Math.abs(
-                        simulationResults.componentData[selectedComponent].current || 0
-                      )
-                    )}{' '}
-                    A
-                  </div>
-                  <div>
-                    <span className="font-semibold">Potencia:</span>{' '}
-                    {formatValue(
-                      Math.abs(
-                        simulationResults.componentData[selectedComponent].power || 0
-                      )
-                    )}{' '}
-                    W
-                  </div>
-                </>
-              )}
+            <div className="flex justify-between items-center bg-white rounded px-3 py-2">
+              <span className="font-semibold text-gray-700">🔋 Corriente:</span>
+              <span className="font-mono text-green-600">
+                {formatValue(Math.abs(simulationResults.componentData[selectedComponent].current || 0))} A
+              </span>
+            </div>
+            <div className="flex justify-between items-center bg-white rounded px-3 py-2">
+              <span className="font-semibold text-gray-700">⚙️ Potencia:</span>
+              <span className="font-mono text-purple-600">
+                {formatValue(Math.abs(simulationResults.componentData[selectedComponent].power || 0))} W
+              </span>
             </div>
           </div>
-        )}
-
-        {/* Instrucciones */}
-        <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
-          <div className="text-xs text-yellow-800">
-            <strong>Cómo usar:</strong>
-            <ol className="list-decimal list-inside mt-1 space-y-1">
-              <li>Selecciona el modo de medición (V, A, Ω)</li>
-              <li>Elige el componente que deseas medir</li>
-              <li>El multímetro mostrará el valor medido</li>
-            </ol>
-          </div>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {/* Instrucciones de uso */}
+      <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-lg p-4 border-2 border-yellow-300">
+        <div className="text-sm text-yellow-900">
+          <div className="font-bold mb-2 flex items-center gap-2">
+            <span>💡</span>
+            <span>Cómo usar el multímetro:</span>
+          </div>
+          <ol className="list-decimal list-inside space-y-1 text-xs">
+            <li>Selecciona el <strong>modo de medición</strong> (Voltaje, Corriente o Resistencia)</li>
+            <li>Elige el <strong>componente</strong> que deseas medir del menú desplegable</li>
+            <li>El multímetro mostrará el <strong>valor medido</strong> en la pantalla LCD</li>
+            <li>Revisa la información completa del componente en el panel inferior</li>
+          </ol>
+        </div>
+      </div>
+    </div>
   );
 };
 

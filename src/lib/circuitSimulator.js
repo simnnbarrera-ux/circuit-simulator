@@ -56,6 +56,8 @@ export class CircuitSimulator {
       return {
         success: true,
         results: this.results,
+        nodeMap: this.nodeMap, // Incluir mapa de nodos para visualización
+        numNodes: this.numNodes,
         message: 'Simulación completada exitosamente'
       };
     } catch (error) {

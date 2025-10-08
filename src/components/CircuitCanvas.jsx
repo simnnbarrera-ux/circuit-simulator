@@ -2,29 +2,40 @@ import { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Line, Circle, Rect, Text, Group } from 'react-konva';
 
 /**
- * Obtener texto del valor del componente con unidades
+ * Obtener texto del valor del componente con unidades e ID legible
  */
 const getComponentValueText = (component) => {
-  const { type, value } = component;
+  const { type, value, readableId } = component;
+  const id = readableId || '';
+  
+  let valueText = '';
   
   switch (type) {
     case 'voltage_source':
-      return `${value} V`;
+      valueText = `${value} V`;
+      break;
     case 'current_source':
-      return `${value} A`;
+      valueText = `${value} A`;
+      break;
     case 'resistor':
-      return value >= 1000 ? `${(value / 1000).toFixed(1)} kΩ` : `${value} Ω`;
+      valueText = value >= 1000 ? `${(value / 1000).toFixed(1)} kΩ` : `${value} Ω`;
+      break;
     case 'capacitor':
-      return value >= 1000 ? `${(value / 1000).toFixed(1)} mF` : `${value} μF`;
+      valueText = value >= 1000 ? `${(value / 1000).toFixed(1)} mF` : `${value} μF`;
+      break;
     case 'inductor':
-      return value >= 1000 ? `${(value / 1000).toFixed(1)} H` : `${value} mH`;
+      valueText = value >= 1000 ? `${(value / 1000).toFixed(1)} H` : `${value} mH`;
+      break;
     case 'led':
-      return `${value} V`;
+      valueText = `${value} V`;
+      break;
     case 'ground':
-      return 'GND';
+      return id || 'GND';
     default:
       return '';
   }
+  
+  return id ? `${id}: ${valueText}` : valueText;
 };
 
 /**
@@ -37,7 +48,10 @@ const CircuitCanvas = ({
   selectedComponent, 
   onSelectComponent,
   connections = [],
-  onConnectionsChange = () => {}
+  onConnectionsChange = () => {},
+  simulationResults = null,
+  isSimulating = false,
+  isManualConnectionMode = false
 }) => {
   const stageRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
@@ -99,6 +113,9 @@ const CircuitCanvas = ({
 
   // Iniciar conexión desde un terminal
   const handleTerminalClick = (componentId, terminalIndex, x, y) => {
+    // Solo permitir conexiones en modo manual
+    if (!isManualConnectionMode) return;
+    
     if (!isConnecting) {
       // Iniciar nueva conexión
       setIsConnecting(true);
@@ -159,15 +176,64 @@ const CircuitCanvas = ({
     return { x: component.x, y: component.y };
   };
 
+  // Obtener nodos únicos de los resultados de simulación
+  const getUniqueNodes = () => {
+    if (!simulationResults || !simulationResults.nodeMap) return [];
+    
+    const nodePositions = new Map();
+    
+    // Iterar sobre el mapa de nodos
+    simulationResults.nodeMap.forEach((nodeNumber, key) => {
+      // key tiene formato "componentId-terminalIndex"
+      const [componentId, terminalIndex] = key.split('-');
+      const pos = getTerminalPosition(componentId, parseInt(terminalIndex));
+      
+      if (!nodePositions.has(nodeNumber)) {
+        nodePositions.set(nodeNumber, { x: pos.x, y: pos.y, count: 1 });
+      } else {
+        // Promediar posiciones de nodos conectados
+        const existing = nodePositions.get(nodeNumber);
+        existing.x = (existing.x * existing.count + pos.x) / (existing.count + 1);
+        existing.y = (existing.y * existing.count + pos.y) / (existing.count + 1);
+        existing.count++;
+      }
+    });
+    
+    return Array.from(nodePositions.entries()).map(([nodeNumber, pos]) => ({
+      nodeNumber,
+      x: pos.x,
+      y: pos.y
+    }));
+  };
+
   return (
     <div id="canvas-container" className="w-full h-full bg-white rounded-lg border-2 border-gray-200 relative overflow-hidden">
       {/* Grid de fondo */}
       <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none" />
       
-      {/* Indicador de modo conexión */}
+      {/* Indicador de modo conexión manual */}
+      {isManualConnectionMode && !isConnecting && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg shadow-lg z-10 animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🔌</span>
+            <div>
+              <div className="font-bold">Modo Conexión Manual Activado</div>
+              <div className="text-xs opacity-90">Haz clic en un terminal de un componente para comenzar</div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Indicador de conexión en progreso */}
       {isConnecting && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-10">
-          🔌 Modo Conexión: Haz clic en otro terminal para conectar
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-10">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">✨</span>
+            <div>
+              <div className="font-bold">Conectando...</div>
+              <div className="text-xs opacity-90">Haz clic en otro terminal para completar la conexión</div>
+            </div>
+          </div>
         </div>
       )}
       
@@ -231,7 +297,37 @@ const CircuitCanvas = ({
               onSelect={() => handleSelect(component.id)}
               onTerminalClick={handleTerminalClick}
               isConnecting={isConnecting}
+              isManualConnectionMode={isManualConnectionMode}
             />
+          ))}
+
+          {/* Renderizar números de nodos durante la simulación */}
+          {isSimulating && simulationResults && getUniqueNodes().map((node, index) => (
+            <Group key={`node-${node.nodeNumber}`} x={node.x} y={node.y}>
+              {/* Círculo de fondo para el número de nodo */}
+              <Circle
+                radius={16}
+                fill="#3b82f6"
+                stroke="#1e40af"
+                strokeWidth={2}
+                shadowColor="black"
+                shadowBlur={5}
+                shadowOpacity={0.3}
+                shadowOffsetX={2}
+                shadowOffsetY={2}
+              />
+              {/* Número de nodo */}
+              <Text
+                x={-12}
+                y={-8}
+                width={24}
+                text={`N${node.nodeNumber}`}
+                fontSize={11}
+                fontStyle="bold"
+                fill="white"
+                align="center"
+              />
+            </Group>
           ))}
         </Layer>
       </Stage>
@@ -242,7 +338,7 @@ const CircuitCanvas = ({
 /**
  * ComponentShape - Renderiza un componente individual con sus terminales
  */
-const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminalClick, isConnecting }) => {
+const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminalClick, isConnecting, isManualConnectionMode = false }) => {
   const { type, x, y, rotation, label } = component;
 
   // Obtener terminales del componente
@@ -299,34 +395,50 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminal
 
       {/* Renderizar terminales */}
       {terminals.map((terminal, index) => (
-        <Circle
-          key={`terminal-${index}`}
-          x={terminal.x}
-          y={terminal.y}
-          radius={isConnecting ? 8 : 5}
-          fill={isConnecting ? "#3b82f6" : "#6b7280"}
-          stroke="#fff"
-          strokeWidth={2}
-          onClick={(e) => {
-            e.cancelBubble = true;
-            e.evt.stopPropagation();
-            console.log('Terminal clicked:', component.id, index);
-            onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
-          }}
-          onTap={(e) => {
-            e.cancelBubble = true;
-            e.evt.stopPropagation();
-            onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
-          }}
-          onMouseEnter={(e) => {
-            const container = e.target.getStage().container();
-            container.style.cursor = 'pointer';
-          }}
-          onMouseLeave={(e) => {
-            const container = e.target.getStage().container();
-            container.style.cursor = 'default';
-          }}
-        />
+        <Group key={`terminal-${index}`}>
+          <Circle
+            x={terminal.x}
+            y={terminal.y}
+            radius={isConnecting ? 10 : (isManualConnectionMode ? 8 : 5)}
+            fill={isConnecting ? "#10b981" : (isManualConnectionMode ? "#3b82f6" : "#6b7280")}
+            stroke="#fff"
+            strokeWidth={2}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              e.evt.stopPropagation();
+              console.log('Terminal clicked:', component.id, index);
+              onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              e.evt.stopPropagation();
+              onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
+            }}
+            onMouseEnter={(e) => {
+              const container = e.target.getStage().container();
+              if (isManualConnectionMode) {
+                container.style.cursor = 'pointer';
+              }
+            }}
+            onMouseLeave={(e) => {
+              const container = e.target.getStage().container();
+              container.style.cursor = 'default';
+            }}
+          />
+          {/* Etiqueta de terminal en modo conexión */}
+          {isManualConnectionMode && !isConnecting && (
+            <Text
+              x={terminal.x - 8}
+              y={terminal.y + 12}
+              width={16}
+              text={`T${index}`}
+              fontSize={8}
+              fontStyle="bold"
+              fill="#3b82f6"
+              align="center"
+            />
+          )}
+        </Group>
       ))}
     </Group>
   );

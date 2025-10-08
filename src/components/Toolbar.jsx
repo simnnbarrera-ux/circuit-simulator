@@ -8,7 +8,8 @@ import {
   Trash2,
   Settings,
   BarChart3,
-  Link2
+  Link2,
+  Activity
 } from 'lucide-react';
 
 /**
@@ -23,8 +24,10 @@ const Toolbar = ({
   onSaveProject,
   onLoadProject,
   onViewAnalysis,
-  isConnectionMode,
-  onToggleConnectionMode
+  onConnectComponents,
+  onToggleMultimeter,
+  showMultimeter,
+  showManualConnectionMode = false
 }) => {
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
@@ -66,23 +69,36 @@ const Toolbar = ({
         </Button>
 
         <Button
-          onClick={onToggleConnectionMode}
-          className={isConnectionMode 
+          onClick={onConnectComponents}
+          variant="outline"
+          className={showManualConnectionMode 
             ? "bg-blue-600 hover:bg-blue-700 text-white" 
             : "bg-gray-100 hover:bg-gray-200 text-gray-700"}
         >
           <Link2 className="w-4 h-4 mr-2" />
-          {isConnectionMode ? 'Modo Conexión: ON' : 'Conectar Componentes'}
+          {showManualConnectionMode ? 'Modo Conexión ON' : 'Conectar Componentes'}
         </Button>
 
         {isSimulating && (
-          <Button
-            onClick={onViewAnalysis}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Ver Valores del Circuito
-          </Button>
+          <>
+            <Button
+              onClick={onViewAnalysis}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Ver Valores del Circuito
+            </Button>
+
+            <Button
+              onClick={onToggleMultimeter}
+              className={showMultimeter 
+                ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                : "bg-gray-100 hover:bg-gray-200 text-gray-700"}
+            >
+              <Activity className="w-4 h-4 mr-2" />
+              {showMultimeter ? 'Ocultar Multímetro' : 'Mostrar Multímetro'}
+            </Button>
+          </>
         )}
 
         <div className="w-px h-8 bg-gray-300 mx-2" />
