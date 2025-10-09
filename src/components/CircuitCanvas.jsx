@@ -93,7 +93,9 @@ const CircuitCanvas = ({
 
   // Manejar la selección de componentes
   const handleSelect = (id) => {
-    onSelectComponent(id);
+    if (!isConnecting) {
+      onSelectComponent(id);
+    }
   };
 
   // Deseleccionar al hacer clic en el canvas vacío
@@ -316,7 +318,7 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminal
     <Group
       x={x}
       y={y}
-      draggable={!isConnecting}
+      draggable={true}
       onDragEnd={onDragEnd}
       onClick={onSelect}
       onTap={onSelect}
@@ -367,8 +369,8 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminal
           <Circle
             x={terminal.x}
             y={terminal.y}
-            radius={isConnecting ? 8 : 5}
-            fill={isConnecting ? "#10b981" : "#6b7280"}
+            radius={5}
+            fill="#6b7280"
             stroke="#fff"
             strokeWidth={2}
             onClick={(e) => {
