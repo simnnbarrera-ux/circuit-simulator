@@ -232,6 +232,7 @@ function App() {
           <ResultsPanel
             results={simulationResults?.results || simulationResults}
             isSimulating={isSimulating}
+            components={components}
           />
         </div>
       </div>
@@ -261,6 +262,7 @@ function App() {
         <AnalysisModal
           results={simulationResults?.results || simulationResults}
           onClose={() => setShowAnalysisModal(false)}
+          components={components}
         />
       )}
 

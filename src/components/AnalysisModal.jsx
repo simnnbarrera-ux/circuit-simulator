@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button.jsx';
 /**
  * AnalysisModal - Modal para mostrar análisis detallado del circuito
  */
-const AnalysisModal = ({ isOpen, onClose, simulationResults, components }) => {
-  if (!isOpen) return null;
-
+const AnalysisModal = ({ onClose, results, components = [] }) => {
+  const simulationResults = results;
   const { nodeVoltages, componentData } = simulationResults || {};
 
   // Formatear voltaje con unidades (siempre en V)
@@ -101,10 +100,10 @@ const AnalysisModal = ({ isOpen, onClose, simulationResults, components }) => {
                         <div className="flex items-start justify-between mb-3">
                           <div>
                             <h4 className="font-bold text-gray-800">
-                              {component?.label || typeNames[data.type] || data.type}
+                              {component?.readableId || component?.label || typeNames[data.type] || data.type}
                             </h4>
                             <p className="text-xs text-gray-500">
-                              {typeNames[data.type]} • ID: {id?.substring(0, 8)}...
+                              {typeNames[data.type]}
                             </p>
                           </div>
                           <span className={`px-3 py-1 rounded-full text-xs font-medium ${

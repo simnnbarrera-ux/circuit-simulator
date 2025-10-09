@@ -8,7 +8,9 @@ import { Trash2, RotateCw } from 'lucide-react';
  * PropertiesPanel - Panel de propiedades del componente seleccionado
  * Permite editar valores, etiquetas y otras propiedades
  */
-const PropertiesPanel = ({ component, onUpdateComponent, onDeleteComponent }) => {
+const PropertiesPanel = ({ selectedComponent, onUpdateComponent, onDeleteComponent }) => {
+  const component = selectedComponent;
+  
   if (!component) {
     return (
       <Card className="h-full">

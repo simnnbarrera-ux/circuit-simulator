@@ -6,7 +6,7 @@ import { Zap, Activity, Power } from 'lucide-react';
  * ResultsPanel - Panel de resultados de la simulación
  * Muestra voltajes, corrientes y potencias calculadas
  */
-const ResultsPanel = ({ results, isSimulating }) => {
+const ResultsPanel = ({ results, isSimulating, components = [] }) => {
   if (!results) {
     return (
       <Card className="h-full">
@@ -73,9 +73,16 @@ const ResultsPanel = ({ results, isSimulating }) => {
             Componentes
           </h3>
           <div className="space-y-2">
-            {Object.entries(componentData || {}).map(([id, data]) => (
-              <ComponentResultCard key={id} data={{ ...data, id }} />
-            ))}
+            {Object.entries(componentData || {}).map(([id, data]) => {
+              const component = components.find(c => c.id === id);
+              return (
+                <ComponentResultCard 
+                  key={id} 
+                  data={{ ...data, id }} 
+                  readableId={component?.readableId}
+                />
+              );
+            })}
           </div>
         </div>
       </CardContent>
@@ -86,8 +93,8 @@ const ResultsPanel = ({ results, isSimulating }) => {
 /**
  * Tarjeta de resultados para un componente individual
  */
-const ComponentResultCard = ({ data }) => {
-  const { type, voltage, current, power } = data;
+const ComponentResultCard = ({ data, readableId }) => {
+  const { voltage = 0, current = 0, power = 0, type = 'unknown' } = data;
 
   const getComponentIcon = (type) => {
     const colors = {
@@ -118,10 +125,10 @@ const ComponentResultCard = ({ data }) => {
     <div className="border border-gray-200 rounded-lg p-3 bg-white hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-2">
         <span className={`text-xs font-semibold ${getComponentIcon(type)}`}>
-          {getComponentName(type)}
+          {readableId || getComponentName(type)}
         </span>
         <span className="text-xs text-gray-400 font-mono">
-          {data.id.split('-')[0]}
+          {getComponentName(type)}
         </span>
       </div>
       
