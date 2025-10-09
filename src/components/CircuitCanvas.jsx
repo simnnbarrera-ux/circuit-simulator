@@ -55,6 +55,9 @@ const CircuitCanvas = ({
   const stageRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionStart, setConnectionStart] = useState(null);
+  const [tempConnection, setTempConnection] = useState(null);
 
   // Ajustar el tamaño del canvas al contenedor
   useEffect(() => {
@@ -97,12 +100,60 @@ const CircuitCanvas = ({
   const handleStageClick = (e) => {
     if (e.target === e.target.getStage()) {
       onSelectComponent(null);
+      if (isConnecting) {
+        setIsConnecting(false);
+        setConnectionStart(null);
+        setTempConnection(null);
+      }
     }
   };
 
   // Eliminar conexión
   const handleConnectionClick = (connectionId) => {
     onConnectionsChange(connections.filter(c => c.id !== connectionId));
+  };
+
+  // Iniciar conexión desde un terminal
+  const handleTerminalClick = (componentId, terminalIndex, x, y) => {
+    if (!isConnecting) {
+      // Iniciar nueva conexión
+      setIsConnecting(true);
+      setConnectionStart({ componentId, terminalIndex, x, y });
+      setTempConnection({ x1: x, y1: y, x2: x, y2: y });
+    } else {
+      // Completar conexión
+      if (connectionStart.componentId !== componentId) {
+        const newConnection = {
+          id: `conn-${Date.now()}`,
+          from: { 
+            componentId: connectionStart.componentId, 
+            terminal: connectionStart.terminalIndex 
+          },
+          to: { 
+            componentId, 
+            terminal: terminalIndex 
+          }
+        };
+        onConnectionsChange([...connections, newConnection]);
+      }
+      setIsConnecting(false);
+      setConnectionStart(null);
+      setTempConnection(null);
+    }
+  };
+
+  // Actualizar conexión temporal mientras se arrastra
+  const handleMouseMove = (e) => {
+    if (isConnecting && connectionStart) {
+      const stage = e.target.getStage();
+      const pointerPos = stage.getPointerPosition();
+      setTempConnection({
+        x1: connectionStart.x,
+        y1: connectionStart.y,
+        x2: pointerPos.x,
+        y2: pointerPos.y
+      });
+    }
   };
 
   // Obtener posición de un terminal
@@ -161,6 +212,7 @@ const CircuitCanvas = ({
         height={stageSize.height}
         onClick={handleStageClick}
         onTap={handleStageClick}
+        onMouseMove={handleMouseMove}
       >
         <Layer>
           {/* Renderizar grid de puntos */}
@@ -194,6 +246,16 @@ const CircuitCanvas = ({
             );
           })}
 
+          {/* Línea temporal de conexión */}
+          {tempConnection && (
+            <Line
+              points={[tempConnection.x1, tempConnection.y1, tempConnection.x2, tempConnection.y2]}
+              stroke="#93c5fd"
+              strokeWidth={2}
+              dash={[5, 5]}
+            />
+          )}
+
            {/* Renderizar componentes */}
           {components.map(component => (
             <ComponentShape
@@ -202,6 +264,8 @@ const CircuitCanvas = ({
               isSelected={selectedComponent === component.id}
               onDragEnd={(e) => handleDragEnd(e, component.id)}
               onSelect={() => handleSelect(component.id)}
+              onTerminalClick={handleTerminalClick}
+              isConnecting={isConnecting}
             />
           ))}
 
@@ -242,7 +306,7 @@ const CircuitCanvas = ({
 /**
  * ComponentShape - Renderiza un componente individual con sus terminales
  */
-const ComponentShape = ({ component, isSelected, onDragEnd, onSelect }) => {
+const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminalClick, isConnecting }) => {
   const { type, x, y, rotation, label } = component;
 
   // Obtener terminales del componente
@@ -252,7 +316,7 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect }) => {
     <Group
       x={x}
       y={y}
-      draggable={true}
+      draggable={!isConnecting}
       onDragEnd={onDragEnd}
       onClick={onSelect}
       onTap={onSelect}
@@ -303,10 +367,26 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect }) => {
           <Circle
             x={terminal.x}
             y={terminal.y}
-            radius={5}
-            fill="#6b7280"
+            radius={isConnecting ? 8 : 5}
+            fill={isConnecting ? "#10b981" : "#6b7280"}
             stroke="#fff"
             strokeWidth={2}
+            onClick={(e) => {
+              e.cancelBubble = true;
+              onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
+            }}
+            onMouseEnter={(e) => {
+              const container = e.target.getStage().container();
+              container.style.cursor = 'pointer';
+            }}
+            onMouseLeave={(e) => {
+              const container = e.target.getStage().container();
+              container.style.cursor = 'default';
+            }}
           />
           {/* Etiqueta del terminal */}
           {(type === 'voltage_source' || type === 'current_source') && (
