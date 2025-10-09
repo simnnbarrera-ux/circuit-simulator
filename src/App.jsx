@@ -36,7 +36,7 @@ function App() {
   const [showMultimeter, setShowMultimeter] = useState(false);
 
   // Estado de la guía de bienvenida
-  const [showWelcomeGuide, setShowWelcomeGuide] = useState(true);
+  const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
 
   // Contadores para IDs automáticos
   const [componentCounters, setComponentCounters] = useState({
@@ -199,12 +199,9 @@ function App() {
     });
   };
 
-  // Estado para modo de conexión manual
-  const [isManualConnectionMode, setIsManualConnectionMode] = useState(false);
-
-  // Conectar componentes manualmente
+  // Conectar componentes manualmente (funcionalidad removida)
   const handleConnectComponents = () => {
-    setIsManualConnectionMode(!isManualConnectionMode);
+    // Funcionalidad deshabilitada - las conexiones se hacen por drag and drop
   };
 
   return (
@@ -216,11 +213,9 @@ function App() {
         onPauseSimulation={handlePauseSimulation}
         onResetSimulation={handleResetSimulation}
         onClearCanvas={handleClearCanvas}
-        onConnectComponents={handleConnectComponents}
         onViewAnalysis={() => setShowAnalysisModal(true)}
         onToggleMultimeter={() => setShowMultimeter(!showMultimeter)}
         showMultimeter={showMultimeter}
-        showManualConnectionMode={isManualConnectionMode}
       />
 
       {/* Contenedor principal */}
@@ -241,7 +236,6 @@ function App() {
             onAddConnection={(conn) => setConnections([...connections, conn])}
             isSimulating={isSimulating}
             simulationResults={simulationResults}
-            isManualConnectionMode={isManualConnectionMode}
           />
         </div>
 

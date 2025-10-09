@@ -50,15 +50,11 @@ const CircuitCanvas = ({
   connections = [],
   onConnectionsChange = () => {},
   simulationResults = null,
-  isSimulating = false,
-  isManualConnectionMode = false
+  isSimulating = false
 }) => {
   const stageRef = useRef(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [isDragging, setIsDragging] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionStart, setConnectionStart] = useState(null);
-  const [tempConnection, setTempConnection] = useState(null);
 
   // Ajustar el tamaño del canvas al contenedor
   useEffect(() => {
@@ -94,65 +90,13 @@ const CircuitCanvas = ({
 
   // Manejar la selección de componentes
   const handleSelect = (id) => {
-    if (!isConnecting) {
-      onSelectComponent(id);
-    }
+    onSelectComponent(id);
   };
 
   // Deseleccionar al hacer clic en el canvas vacío
   const handleStageClick = (e) => {
     if (e.target === e.target.getStage()) {
       onSelectComponent(null);
-      if (isConnecting) {
-        setIsConnecting(false);
-        setConnectionStart(null);
-        setTempConnection(null);
-      }
-    }
-  };
-
-  // Iniciar conexión desde un terminal
-  const handleTerminalClick = (componentId, terminalIndex, x, y) => {
-    // Solo permitir conexiones en modo manual
-    if (!isManualConnectionMode) return;
-    
-    if (!isConnecting) {
-      // Iniciar nueva conexión
-      setIsConnecting(true);
-      setConnectionStart({ componentId, terminalIndex, x, y });
-    } else {
-      // Completar conexión
-      if (connectionStart.componentId !== componentId) {
-        const newConnection = {
-          id: `conn-${Date.now()}`,
-          from: { 
-            componentId: connectionStart.componentId, 
-            terminal: connectionStart.terminalIndex 
-          },
-          to: { 
-            componentId, 
-            terminal: terminalIndex 
-          }
-        };
-        onConnectionsChange([...connections, newConnection]);
-      }
-      setIsConnecting(false);
-      setConnectionStart(null);
-      setTempConnection(null);
-    }
-  };
-
-  // Actualizar conexión temporal mientras se arrastra
-  const handleMouseMove = (e) => {
-    if (isConnecting && connectionStart) {
-      const stage = e.target.getStage();
-      const pointerPos = stage.getPointerPosition();
-      setTempConnection({
-        x1: connectionStart.x,
-        y1: connectionStart.y,
-        x2: pointerPos.x,
-        y2: pointerPos.y
-      });
     }
   };
 
@@ -211,39 +155,12 @@ const CircuitCanvas = ({
       {/* Grid de fondo */}
       <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none" />
       
-      {/* Indicador de modo conexión manual */}
-      {isManualConnectionMode && !isConnecting && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg shadow-lg z-10 animate-pulse">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🔌</span>
-            <div>
-              <div className="font-bold">Modo Conexión Manual Activado</div>
-              <div className="text-xs opacity-90">Haz clic en un terminal de un componente para comenzar</div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Indicador de conexión en progreso */}
-      {isConnecting && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-10">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">✨</span>
-            <div>
-              <div className="font-bold">Conectando...</div>
-              <div className="text-xs opacity-90">Haz clic en otro terminal para completar la conexión</div>
-            </div>
-          </div>
-        </div>
-      )}
-      
       <Stage
         ref={stageRef}
         width={stageSize.width}
         height={stageSize.height}
         onClick={handleStageClick}
         onTap={handleStageClick}
-        onMouseMove={handleMouseMove}
       >
         <Layer>
           {/* Renderizar grid de puntos */}
@@ -277,17 +194,7 @@ const CircuitCanvas = ({
             );
           })}
 
-          {/* Renderizar conexión temporal */}
-          {tempConnection && (
-            <Line
-              points={[tempConnection.x1, tempConnection.y1, tempConnection.x2, tempConnection.y2]}
-              stroke="#93c5fd"
-              strokeWidth={2}
-              dash={[5, 5]}
-            />
-          )}
-
-          {/* Renderizar componentes */}
+           {/* Renderizar componentes */}
           {components.map(component => (
             <ComponentShape
               key={component.id}
@@ -295,11 +202,8 @@ const CircuitCanvas = ({
               isSelected={selectedComponent === component.id}
               onDragEnd={(e) => handleDragEnd(e, component.id)}
               onSelect={() => handleSelect(component.id)}
-              onTerminalClick={handleTerminalClick}
-              isConnecting={isConnecting}
-              isManualConnectionMode={isManualConnectionMode}
             />
-          ))}
+          ))}}
 
           {/* Renderizar números de nodos durante la simulación */}
           {isSimulating && simulationResults && getUniqueNodes().map((node, index) => (
@@ -338,7 +242,7 @@ const CircuitCanvas = ({
 /**
  * ComponentShape - Renderiza un componente individual con sus terminales
  */
-const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminalClick, isConnecting, isManualConnectionMode = false }) => {
+const ComponentShape = ({ component, isSelected, onDragEnd, onSelect }) => {
   const { type, x, y, rotation, label } = component;
 
   // Obtener terminales del componente
@@ -348,7 +252,7 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminal
     <Group
       x={x}
       y={y}
-      draggable={!isConnecting}
+      draggable={true}
       onDragEnd={onDragEnd}
       onClick={onSelect}
       onTap={onSelect}
@@ -395,50 +299,15 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminal
 
       {/* Renderizar terminales */}
       {terminals.map((terminal, index) => (
-        <Group key={`terminal-${index}`}>
-          <Circle
-            x={terminal.x}
-            y={terminal.y}
-            radius={isConnecting ? 10 : (isManualConnectionMode ? 8 : 5)}
-            fill={isConnecting ? "#10b981" : (isManualConnectionMode ? "#3b82f6" : "#6b7280")}
-            stroke="#fff"
-            strokeWidth={2}
-            onClick={(e) => {
-              e.cancelBubble = true;
-              e.evt.stopPropagation();
-              console.log('Terminal clicked:', component.id, index);
-              onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
-            }}
-            onTap={(e) => {
-              e.cancelBubble = true;
-              e.evt.stopPropagation();
-              onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
-            }}
-            onMouseEnter={(e) => {
-              const container = e.target.getStage().container();
-              if (isManualConnectionMode) {
-                container.style.cursor = 'pointer';
-              }
-            }}
-            onMouseLeave={(e) => {
-              const container = e.target.getStage().container();
-              container.style.cursor = 'default';
-            }}
-          />
-          {/* Etiqueta de terminal en modo conexión */}
-          {isManualConnectionMode && !isConnecting && (
-            <Text
-              x={terminal.x - 8}
-              y={terminal.y + 12}
-              width={16}
-              text={`T${index}`}
-              fontSize={8}
-              fontStyle="bold"
-              fill="#3b82f6"
-              align="center"
-            />
-          )}
-        </Group>
+        <Circle
+          key={`terminal-${index}`}
+          x={terminal.x}
+          y={terminal.y}
+          radius={5}
+          fill="#6b7280"
+          stroke="#fff"
+          strokeWidth={2}
+        />
       ))}
     </Group>
   );
