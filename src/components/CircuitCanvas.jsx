@@ -378,20 +378,20 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminal
               e.evt.stopPropagation();
               console.log('Terminal clicked:', component.id, index);
               onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
-          }}
-          onTap={(e) => {
-            e.cancelBubble = true;
-            e.evt.stopPropagation();
-            onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
-          }}
-          onMouseEnter={(e) => {
-            const container = e.target.getStage().container();
-            container.style.cursor = 'pointer';
-          }}
-          onMouseLeave={(e) => {
-            const container = e.target.getStage().container();
-            container.style.cursor = 'default';
-          }}
+            }}
+            onTap={(e) => {
+              e.cancelBubble = true;
+              e.evt.stopPropagation();
+              onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
+            }}
+            onMouseEnter={(e) => {
+              const container = e.target.getStage().container();
+              container.style.cursor = 'pointer';
+            }}
+            onMouseLeave={(e) => {
+              const container = e.target.getStage().container();
+              container.style.cursor = 'default';
+            }}
           />
           {/* Etiqueta del terminal para fuentes */}
           {(type === 'voltage_source' || type === 'current_source') && (

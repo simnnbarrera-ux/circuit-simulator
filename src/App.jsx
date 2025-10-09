@@ -229,11 +229,11 @@ function App() {
         <div className="flex-1 relative">
           <CircuitCanvas
             components={components}
+            onComponentsChange={setComponents}
             connections={connections}
-            selectedComponentId={selectedComponentId}
-            onSelectComponent={handleSelectComponent}
-            onUpdateComponent={handleUpdateComponent}
-            onAddConnection={(conn) => setConnections([...connections, conn])}
+            onConnectionsChange={setConnections}
+            selectedComponent={selectedComponentId}
+            onSelectComponent={setSelectedComponentId}
             isSimulating={isSimulating}
             simulationResults={simulationResults}
           />
