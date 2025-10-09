@@ -203,7 +203,7 @@ const CircuitCanvas = ({
               onDragEnd={(e) => handleDragEnd(e, component.id)}
               onSelect={() => handleSelect(component.id)}
             />
-          ))}}
+          ))}
 
           {/* Renderizar números de nodos durante la simulación */}
           {isSimulating && simulationResults && getUniqueNodes().map((node, index) => (
@@ -299,15 +299,29 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect }) => {
 
       {/* Renderizar terminales */}
       {terminals.map((terminal, index) => (
-        <Circle
-          key={`terminal-${index}`}
-          x={terminal.x}
-          y={terminal.y}
-          radius={5}
-          fill="#6b7280"
-          stroke="#fff"
-          strokeWidth={2}
-        />
+        <Group key={`terminal-${index}`}>
+          <Circle
+            x={terminal.x}
+            y={terminal.y}
+            radius={5}
+            fill="#6b7280"
+            stroke="#fff"
+            strokeWidth={2}
+          />
+          {/* Etiqueta del terminal */}
+          {(type === 'voltage_source' || type === 'current_source') && (
+            <Text
+              x={terminal.x - 8}
+              y={terminal.y + 15}
+              width={16}
+              text={index === 0 ? '−' : '+'}
+              fontSize={12}
+              fontStyle="bold"
+              fill={type === 'voltage_source' ? '#dc2626' : '#3b82f6'}
+              align="center"
+            />
+          )}
+        </Group>
       ))}
     </Group>
   );
