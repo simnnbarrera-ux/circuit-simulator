@@ -152,12 +152,69 @@ const CircuitCanvas = ({
     }
   };
 
-  // Eliminar conexión
-  const handleConnectionClick = (connectionId) => {
-    onConnectionsChange(connections.filter(c => c.id !== connectionId));
+  // Calcular nodos a partir de las conexiones
+  const calculateNodesFromConnections = () => {
+    const nodeMap = new Map(); // Mapa de terminal -> nodo
+    let nextNodeNumber = 0;
+    
+    // Función auxiliar para obtener la clave del terminal
+    const getTerminalKey = (compId, terminalIdx) => `${compId}-${terminalIdx}`;
+    
+    // Asignar nodos a las tierras primero (siempre nodo 0)
+    components.forEach(component => {
+      if (component.type === 'ground') {
+        const terminals = getComponentTerminals(component);
+        terminals.forEach((_, idx) => {
+          nodeMap.set(getTerminalKey(component.id, idx), 0);
+        });
+      }
+    });
+    
+    // Si hay nodo 0, empezar desde 1
+    if (nodeMap.size > 0) {
+      nextNodeNumber = 1;
+    }
+    
+    // Procesar conexiones
+    connections.forEach(conn => {
+      const fromKey = getTerminalKey(conn.from.componentId, conn.from.terminal);
+      const toKey = getTerminalKey(conn.to.componentId, conn.to.terminal);
+      
+      const fromNode = nodeMap.get(fromKey);
+      const toNode = nodeMap.get(toKey);
+      
+      if (fromNode !== undefined && toNode !== undefined) {
+        // Ambos ya tienen nodo, no hacer nada (o podrían fusionarse)
+      } else if (fromNode !== undefined) {
+        // From tiene nodo, asignar el mismo a To
+        nodeMap.set(toKey, fromNode);
+      } else if (toNode !== undefined) {
+        // To tiene nodo, asignar el mismo a From
+        nodeMap.set(fromKey, toNode);
+      } else {
+        // Ninguno tiene nodo, crear uno nuevo
+        nodeMap.set(fromKey, nextNodeNumber);
+        nodeMap.set(toKey, nextNodeNumber);
+        nextNodeNumber++;
+      }
+    });
+    
+    // Asignar nodos a terminales no conectados
+    components.forEach(component => {
+      const terminals = getComponentTerminals(component);
+      terminals.forEach((_, idx) => {
+        const key = getTerminalKey(component.id, idx);
+        if (!nodeMap.has(key)) {
+          nodeMap.set(key, nextNodeNumber);
+          nextNodeNumber++;
+        }
+      });
+    });
+    
+    return nodeMap;
   };
 
-  // Obtener posición de un terminal
+  // Obtener posición de un terminal específico
   const getTerminalPosition = (componentId, terminalIndex) => {
     const component = components.find(c => c.id === componentId);
     if (!component) return { x: 0, y: 0 };
@@ -170,6 +227,11 @@ const CircuitCanvas = ({
       };
     }
     return { x: component.x, y: component.y };
+  };
+
+  // Eliminar conexión
+  const handleConnectionClick = (connectionId) => {
+    onConnectionsChange(connections.filter(c => c.id !== connectionId));
   };
 
   return (
@@ -247,29 +309,28 @@ const CircuitCanvas = ({
             />
           ))}
 
-          {/* Renderizar números de nodos durante la simulación */}
-          {isSimulating && simulationResults && simulationResults.nodeMap && (() => {
+          {/* Renderizar números de nodos siempre */}
+          {components.length > 0 && (() => {
+            const nodeMap = calculateNodesFromConnections();
             const nodePositions = new Map();
             
             // Calcular posiciones promedio para cada nodo
             components.forEach(component => {
               const terminals = getComponentTerminals(component);
-              const compNodeMap = simulationResults.nodeMap[component.id];
-              
-              if (compNodeMap) {
-                terminals.forEach((terminal, index) => {
-                  const nodeNumber = compNodeMap[index];
-                  if (nodeNumber !== undefined) {
-                    if (!nodePositions.has(nodeNumber)) {
-                      nodePositions.set(nodeNumber, { x: 0, y: 0, count: 0 });
-                    }
-                    const pos = nodePositions.get(nodeNumber);
-                    pos.x += component.x + terminal.x;
-                    pos.y += component.y + terminal.y;
-                    pos.count += 1;
+              terminals.forEach((terminal, index) => {
+                const key = `${component.id}-${index}`;
+                const nodeNumber = nodeMap.get(key);
+                
+                if (nodeNumber !== undefined) {
+                  if (!nodePositions.has(nodeNumber)) {
+                    nodePositions.set(nodeNumber, { x: 0, y: 0, count: 0 });
                   }
-                });
-              }
+                  const pos = nodePositions.get(nodeNumber);
+                  pos.x += component.x + terminal.x;
+                  pos.y += component.y + terminal.y;
+                  pos.count += 1;
+                }
+              });
             });
 
             // Renderizar nodos
