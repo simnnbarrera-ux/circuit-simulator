@@ -110,18 +110,12 @@ const CircuitCanvas = ({
     }
   };
 
-  // Eliminar conexión
-  const handleConnectionClick = (connectionId) => {
-    onConnectionsChange(connections.filter(c => c.id !== connectionId));
-  };
-
   // Iniciar conexión desde un terminal
   const handleTerminalClick = (componentId, terminalIndex, x, y) => {
     if (!isConnecting) {
       // Iniciar nueva conexión
       setIsConnecting(true);
       setConnectionStart({ componentId, terminalIndex, x, y });
-      setTempConnection({ x1: x, y1: y, x2: x, y2: y });
     } else {
       // Completar conexión
       if (connectionStart.componentId !== componentId) {
@@ -158,6 +152,11 @@ const CircuitCanvas = ({
     }
   };
 
+  // Eliminar conexión
+  const handleConnectionClick = (connectionId) => {
+    onConnectionsChange(connections.filter(c => c.id !== connectionId));
+  };
+
   // Obtener posición de un terminal
   const getTerminalPosition = (componentId, terminalIndex) => {
     const component = components.find(c => c.id === componentId);
@@ -173,40 +172,17 @@ const CircuitCanvas = ({
     return { x: component.x, y: component.y };
   };
 
-  // Obtener nodos únicos de los resultados de simulación
-  const getUniqueNodes = () => {
-    if (!simulationResults || !simulationResults.nodeMap) return [];
-    
-    const nodePositions = new Map();
-    
-    // Iterar sobre el mapa de nodos
-    simulationResults.nodeMap.forEach((nodeNumber, key) => {
-      // key tiene formato "componentId-terminalIndex"
-      const [componentId, terminalIndex] = key.split('-');
-      const pos = getTerminalPosition(componentId, parseInt(terminalIndex));
-      
-      if (!nodePositions.has(nodeNumber)) {
-        nodePositions.set(nodeNumber, { x: pos.x, y: pos.y, count: 1 });
-      } else {
-        // Promediar posiciones de nodos conectados
-        const existing = nodePositions.get(nodeNumber);
-        existing.x = (existing.x * existing.count + pos.x) / (existing.count + 1);
-        existing.y = (existing.y * existing.count + pos.y) / (existing.count + 1);
-        existing.count++;
-      }
-    });
-    
-    return Array.from(nodePositions.entries()).map(([nodeNumber, pos]) => ({
-      nodeNumber,
-      x: pos.x,
-      y: pos.y
-    }));
-  };
-
   return (
     <div id="canvas-container" className="w-full h-full bg-white rounded-lg border-2 border-gray-200 relative overflow-hidden">
       {/* Grid de fondo */}
       <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none" />
+      
+      {/* Indicador de modo conexión */}
+      {isConnecting && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-10">
+          🔌 Modo Conexión: Haz clic en otro terminal para conectar
+        </div>
+      )}
       
       <Stage
         ref={stageRef}
@@ -248,7 +224,7 @@ const CircuitCanvas = ({
             );
           })}
 
-          {/* Línea temporal de conexión */}
+          {/* Renderizar conexión temporal */}
           {tempConnection && (
             <Line
               points={[tempConnection.x1, tempConnection.y1, tempConnection.x2, tempConnection.y2]}
@@ -258,7 +234,7 @@ const CircuitCanvas = ({
             />
           )}
 
-           {/* Renderizar componentes */}
+          {/* Renderizar componentes */}
           {components.map(component => (
             <ComponentShape
               key={component.id}
@@ -272,33 +248,57 @@ const CircuitCanvas = ({
           ))}
 
           {/* Renderizar números de nodos durante la simulación */}
-          {isSimulating && simulationResults && getUniqueNodes().map((node, index) => (
-            <Group key={`node-${node.nodeNumber}`} x={node.x} y={node.y}>
-              {/* Círculo de fondo para el número de nodo */}
-              <Circle
-                radius={16}
-                fill="#3b82f6"
-                stroke="#1e40af"
-                strokeWidth={2}
-                shadowColor="black"
-                shadowBlur={5}
-                shadowOpacity={0.3}
-                shadowOffsetX={2}
-                shadowOffsetY={2}
-              />
-              {/* Número de nodo */}
-              <Text
-                x={-12}
-                y={-8}
-                width={24}
-                text={`N${node.nodeNumber}`}
-                fontSize={11}
-                fontStyle="bold"
-                fill="white"
-                align="center"
-              />
-            </Group>
-          ))}
+          {isSimulating && simulationResults && simulationResults.nodeMap && (() => {
+            const nodePositions = new Map();
+            
+            // Calcular posiciones promedio para cada nodo
+            components.forEach(component => {
+              const terminals = getComponentTerminals(component);
+              const compNodeMap = simulationResults.nodeMap[component.id];
+              
+              if (compNodeMap) {
+                terminals.forEach((terminal, index) => {
+                  const nodeNumber = compNodeMap[index];
+                  if (nodeNumber !== undefined) {
+                    if (!nodePositions.has(nodeNumber)) {
+                      nodePositions.set(nodeNumber, { x: 0, y: 0, count: 0 });
+                    }
+                    const pos = nodePositions.get(nodeNumber);
+                    pos.x += component.x + terminal.x;
+                    pos.y += component.y + terminal.y;
+                    pos.count += 1;
+                  }
+                });
+              }
+            });
+
+            // Renderizar nodos
+            return Array.from(nodePositions.entries()).map(([nodeNumber, pos]) => (
+              <Group key={`node-${nodeNumber}`} x={pos.x / pos.count} y={pos.y / pos.count}>
+                <Circle
+                  radius={16}
+                  fill="#3b82f6"
+                  stroke="#1e40af"
+                  strokeWidth={2}
+                  shadowColor="black"
+                  shadowBlur={5}
+                  shadowOpacity={0.3}
+                  shadowOffsetX={2}
+                  shadowOffsetY={2}
+                />
+                <Text
+                  x={-12}
+                  y={-8}
+                  width={24}
+                  text={`N${nodeNumber}`}
+                  fontSize={11}
+                  fontStyle="bold"
+                  fill="white"
+                  align="center"
+                />
+              </Group>
+            ));
+          })()}
         </Layer>
       </Stage>
     </div>
@@ -318,7 +318,7 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminal
     <Group
       x={x}
       y={y}
-      draggable={true}
+      draggable={!isConnecting}
       onDragEnd={onDragEnd}
       onClick={onSelect}
       onTap={onSelect}
@@ -369,28 +369,31 @@ const ComponentShape = ({ component, isSelected, onDragEnd, onSelect, onTerminal
           <Circle
             x={terminal.x}
             y={terminal.y}
-            radius={5}
-            fill="#6b7280"
+            radius={isConnecting ? 8 : 5}
+            fill={isConnecting ? "#3b82f6" : "#6b7280"}
             stroke="#fff"
             strokeWidth={2}
             onClick={(e) => {
               e.cancelBubble = true;
+              e.evt.stopPropagation();
+              console.log('Terminal clicked:', component.id, index);
               onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
-            }}
-            onTap={(e) => {
-              e.cancelBubble = true;
-              onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
-            }}
-            onMouseEnter={(e) => {
-              const container = e.target.getStage().container();
-              container.style.cursor = 'pointer';
-            }}
-            onMouseLeave={(e) => {
-              const container = e.target.getStage().container();
-              container.style.cursor = 'default';
-            }}
+          }}
+          onTap={(e) => {
+            e.cancelBubble = true;
+            e.evt.stopPropagation();
+            onTerminalClick(component.id, index, x + terminal.x, y + terminal.y);
+          }}
+          onMouseEnter={(e) => {
+            const container = e.target.getStage().container();
+            container.style.cursor = 'pointer';
+          }}
+          onMouseLeave={(e) => {
+            const container = e.target.getStage().container();
+            container.style.cursor = 'default';
+          }}
           />
-          {/* Etiqueta del terminal */}
+          {/* Etiqueta del terminal para fuentes */}
           {(type === 'voltage_source' || type === 'current_source') && (
             <Text
               x={terminal.x - 8}
