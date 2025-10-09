@@ -125,34 +125,16 @@ function App() {
         return;
       }
 
-      // Crear conexiones automáticas basadas en proximidad
-      const autoConnections = [];
-      const proximityThreshold = 150;
-
-      for (let i = 0; i < components.length; i++) {
-        for (let j = i + 1; j < components.length; j++) {
-          const comp1 = components[i];
-          const comp2 = components[j];
-          const distance = Math.sqrt(
-            Math.pow(comp1.x - comp2.x, 2) + Math.pow(comp1.y - comp2.y, 2)
-          );
-
-          if (distance < proximityThreshold) {
-            autoConnections.push({
-              from: comp1.id,
-              to: comp2.id,
-              fromTerminal: 1,
-              toTerminal: 0
-            });
-          }
-        }
+      // Validar que haya conexiones
+      if (connections.length === 0) {
+        alert('Conecta los componentes antes de iniciar la simulación.');
+        return;
       }
 
-      setConnections(autoConnections);
-      console.log('Conexiones automáticas creadas:', autoConnections);
+      console.log('Iniciando simulación con conexiones:', connections);
 
-      // Ejecutar simulación
-      const simulationOutput = simulateCircuit(components, autoConnections);
+      // Ejecutar simulación con las conexiones manuales existentes
+      const simulationOutput = simulateCircuit(components, connections);
       console.log('Resultados de simulación:', simulationOutput);
       
       // Guardar resultados completos incluyendo nodeMap
