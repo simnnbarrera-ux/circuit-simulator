@@ -181,9 +181,91 @@ function App() {
     });
   };
 
-  // Conectar componentes manualmente (funcionalidad removida)
-  const handleConnectComponents = () => {
-    // Funcionalidad deshabilitada - las conexiones se hacen por drag and drop
+  // Guardar proyecto
+  const handleSaveProject = () => {
+    try {
+      const projectData = {
+        version: '1.0.0',
+        timestamp: new Date().toISOString(),
+        components: components,
+        connections: connections,
+        componentCounters: componentCounters
+      };
+
+      const dataStr = JSON.stringify(projectData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(dataBlob);
+      
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `circuito_${new Date().getTime()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      alert('Proyecto guardado exitosamente');
+    } catch (error) {
+      console.error('Error al guardar:', error);
+      alert('Error al guardar el proyecto');
+    }
+  };
+
+  // Cargar proyecto
+  const handleLoadProject = () => {
+    try {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const projectData = JSON.parse(event.target.result);
+            
+            // Validar estructura básica
+            if (!projectData.components || !projectData.connections) {
+              throw new Error('Archivo de proyecto inválido');
+            }
+
+            // Cargar datos
+            setComponents(projectData.components || []);
+            setConnections(projectData.connections || []);
+            setComponentCounters(projectData.componentCounters || {
+              voltage_source: 0,
+              current_source: 0,
+              resistor: 0,
+              capacitor: 0,
+              inductor: 0,
+              led: 0,
+              ground: 0
+            });
+            
+            // Resetear estado de simulación
+            setIsSimulating(false);
+            setSimulationResults(null);
+            setSelectedComponentId(null);
+            setShowMultimeter(false);
+
+            alert('Proyecto cargado exitosamente');
+          } catch (error) {
+            console.error('Error al parsear archivo:', error);
+            alert('Error al cargar el proyecto: archivo inválido');
+          }
+        };
+        
+        reader.readAsText(file);
+      };
+      
+      input.click();
+    } catch (error) {
+      console.error('Error al cargar:', error);
+      alert('Error al cargar el proyecto');
+    }
   };
 
   return (
@@ -195,6 +277,8 @@ function App() {
         onPauseSimulation={handlePauseSimulation}
         onResetSimulation={handleResetSimulation}
         onClearCanvas={handleClearCanvas}
+        onSaveProject={handleSaveProject}
+        onLoadProject={handleLoadProject}
         onViewAnalysis={() => setShowAnalysisModal(true)}
         onToggleMultimeter={() => setShowMultimeter(!showMultimeter)}
         showMultimeter={showMultimeter}

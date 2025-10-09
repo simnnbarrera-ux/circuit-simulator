@@ -309,8 +309,8 @@ const CircuitCanvas = ({
             />
           ))}
 
-          {/* Renderizar números de nodos siempre */}
-          {components.length > 0 && (() => {
+          {/* Renderizar números de nodos solo durante simulación */}
+          {isSimulating && components.length > 0 && (() => {
             const nodeMap = calculateNodesFromConnections();
             const nodePositions = new Map();
             
@@ -333,26 +333,26 @@ const CircuitCanvas = ({
               });
             });
 
-            // Renderizar nodos
+            // Renderizar nodos (más pequeños)
             return Array.from(nodePositions.entries()).map(([nodeNumber, pos]) => (
               <Group key={`node-${nodeNumber}`} x={pos.x / pos.count} y={pos.y / pos.count}>
                 <Circle
-                  radius={16}
+                  radius={10}
                   fill="#3b82f6"
                   stroke="#1e40af"
-                  strokeWidth={2}
+                  strokeWidth={1.5}
                   shadowColor="black"
-                  shadowBlur={5}
-                  shadowOpacity={0.3}
-                  shadowOffsetX={2}
-                  shadowOffsetY={2}
+                  shadowBlur={3}
+                  shadowOpacity={0.2}
+                  shadowOffsetX={1}
+                  shadowOffsetY={1}
                 />
                 <Text
-                  x={-12}
-                  y={-8}
-                  width={24}
+                  x={-8}
+                  y={-6}
+                  width={16}
                   text={`N${nodeNumber}`}
-                  fontSize={11}
+                  fontSize={8}
                   fontStyle="bold"
                   fill="white"
                   align="center"
