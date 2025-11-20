@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import './App.css';
+import './animations.css';
 import Toolbar from './components/Toolbar';
-import ComponentLibrary from './components/ComponentLibrary';
-import CircuitCanvas from './components/CircuitCanvas';
+import ComponentLibrary from './components/ComponentLibraryModern';
+import CircuitCanvas from './components/CircuitCanvasModern';
 import PropertiesPanel from './components/PropertiesPanel';
 import ResultsPanel from './components/ResultsPanel';
 import AnalysisModal from './components/AnalysisModal';
