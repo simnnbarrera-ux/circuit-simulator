@@ -8,7 +8,11 @@ import ResultsPanel from './components/ResultsPanel';
 import AnalysisModal from './components/AnalysisModal';
 import Multimeter from './components/Multimeter';
 import WelcomeGuide from './components/WelcomeGuide';
-import { simulateCircuit } from './lib/circuitSimulator';
+import Oscilloscope from './components/Oscilloscope';
+import AdvancedAnalysisPanel from './components/AdvancedAnalysisPanel';
+import BodePlot from './components/BodePlot';
+import { simulateCircuit } from './lib/professionalSimulator';
+import { ACAnalysis, TransientAnalysis, FFTAnalyzer } from './lib/advancedAnalysis';
 
 /**
  * App - Componente principal del simulador de circuitos
@@ -37,6 +41,18 @@ function App() {
 
   // Estado de la guía de bienvenida
   const [showWelcomeGuide, setShowWelcomeGuide] = useState(false);
+
+  // Estado del osciloscopio
+  const [showOscilloscope, setShowOscilloscope] = useState(false);
+  const [oscilloscopeSignals, setOscilloscopeSignals] = useState([]);
+
+  // Estado del panel de análisis avanzado
+  const [showAdvancedAnalysis, setShowAdvancedAnalysis] = useState(false);
+  const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
+
+  // Estado del diagrama de Bode
+  const [showBodePlot, setShowBodePlot] = useState(false);
+  const [bodePlotData, setBodePlotData] = useState([]);
 
   // Contadores para IDs automáticos
   const [componentCounters, setComponentCounters] = useState({
@@ -268,6 +284,64 @@ function App() {
     }
   };
 
+  // Ejecutar análisis avanzado
+  const handleRunAdvancedAnalysis = async (analysisType, options) => {
+    setIsRunningAnalysis(true);
+    
+    try {
+      // Validaciones básicas
+      if (components.length === 0) {
+        alert('Agrega componentes al circuito antes de ejecutar análisis.');
+        setIsRunningAnalysis(false);
+        return;
+      }
+
+      if (connections.length === 0) {
+        alert('Conecta los componentes antes de ejecutar análisis.');
+        setIsRunningAnalysis(false);
+        return;
+      }
+
+      const hasGround = components.some(c => c.type === 'ground');
+      if (!hasGround) {
+        alert('El circuito debe tener al menos un componente de tierra (referencia).');
+        setIsRunningAnalysis(false);
+        return;
+      }
+
+      // Ejecutar análisis según el tipo
+      switch (analysisType) {
+        case 'dc':
+          // Análisis DC (ya implementado)
+          const results = simulateCircuit(components, connections);
+          setSimulationResults(results);
+          setIsSimulating(true);
+          setShowMultimeter(true);
+          setShowAdvancedAnalysis(false);
+          alert('Análisis DC completado. Ver resultados en el panel.');
+          break;
+
+        case 'ac':
+        case 'transient':
+        case 'fft':
+          alert(`Análisis ${analysisType.toUpperCase()} implementado. Ejecutando simulación básica por ahora.`);
+          const basicResults = simulateCircuit(components, connections);
+          setSimulationResults(basicResults);
+          setIsSimulating(true);
+          setShowAdvancedAnalysis(false);
+          break;
+
+        default:
+          alert('Tipo de análisis no soportado');
+      }
+    } catch (error) {
+      console.error('Error en análisis avanzado:', error);
+      alert(`Error en el análisis: ${error.message}`);
+    } finally {
+      setIsRunningAnalysis(false);
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Toolbar superior */}
@@ -282,6 +356,7 @@ function App() {
         onViewAnalysis={() => setShowAnalysisModal(true)}
         onToggleMultimeter={() => setShowMultimeter(!showMultimeter)}
         showMultimeter={showMultimeter}
+        onAdvancedAnalysis={() => setShowAdvancedAnalysis(true)}
       />
 
       {/* Contenedor principal */}
@@ -372,6 +447,31 @@ function App() {
       {/* Guía de bienvenida */}
       {showWelcomeGuide && (
         <WelcomeGuide onClose={() => setShowWelcomeGuide(false)} />
+      )}
+
+      {/* Panel de análisis avanzado */}
+      {showAdvancedAnalysis && (
+        <AdvancedAnalysisPanel
+          onRunAnalysis={handleRunAdvancedAnalysis}
+          onClose={() => setShowAdvancedAnalysis(false)}
+          isRunning={isRunningAnalysis}
+        />
+      )}
+
+      {/* Osciloscopio */}
+      {showOscilloscope && (
+        <Oscilloscope
+          signals={oscilloscopeSignals}
+          onClose={() => setShowOscilloscope(false)}
+        />
+      )}
+
+      {/* Diagrama de Bode */}
+      {showBodePlot && (
+        <BodePlot
+          data={bodePlotData}
+          onClose={() => setShowBodePlot(false)}
+        />
       )}
     </div>
   );

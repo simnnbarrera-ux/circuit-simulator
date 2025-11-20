@@ -24,7 +24,8 @@ const Toolbar = ({
   onLoadProject,
   onViewAnalysis,
   onToggleMultimeter,
-  showMultimeter
+  showMultimeter,
+  onAdvancedAnalysis
 }) => {
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm">
@@ -84,6 +85,16 @@ const Toolbar = ({
               <Activity className="w-4 h-4 mr-2" />
               {showMultimeter ? 'Ocultar Multímetro' : 'Mostrar Multímetro'}
             </Button>
+
+            {onAdvancedAnalysis && (
+              <Button
+                onClick={onAdvancedAnalysis}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Análisis Avanzado
+              </Button>
+            )}
           </>
         )}
 
